@@ -52,10 +52,8 @@ static inline void u2hts_led_flash(uint16_t times) {
 }
 
 inline void u2hts_led_show_error_code(U2HTS_ERROR_CODES code) {
-  while (1) {
-    u2hts_led_flash(code);
-    u2hts_delay_ms(1000);
-  }
+  u2hts_led_flash(code);
+  u2hts_delay_ms(1000);
 }
 
 #endif
@@ -215,7 +213,7 @@ inline static u2hts_touch_controller* u2hts_get_touch_controller_by_name(
   return NULL;
 }
 
-inline static u2hts_touch_controller* u2hts_get_touch_controller_by_addr(
+inline static u2hts_touch_controller* u2hts_get_touch_controller_by_i2c_addr(
     const uint8_t addr) {
   for (u2hts_touch_controller** tc = &__u2hts_touch_controllers_begin;
        tc < &__u2hts_touch_controllers_end; tc++)
@@ -239,7 +237,7 @@ inline static U2HTS_ERROR_CODES u2hts_scan_touch_controller(
     return UE_NSLAVE;
   }
 
-  *tc = u2hts_get_touch_controller_by_addr(slave_addr);
+  *tc = u2hts_get_touch_controller_by_i2c_addr(slave_addr);
   if (!*tc) {
     U2HTS_LOG_ERROR(
         "No touch controller with i2c addr 0x%x compatible was found",
@@ -257,7 +255,7 @@ inline uint8_t u2hts_get_max_tps() { return config->max_tps; }
 
 inline U2HTS_ERROR_CODES u2hts_init(u2hts_config* cfg) {
   U2HTS_LOG_DEBUG("Enter %s", __func__);
-  U2HTS_ERROR_CODES ret = UE_OK;
+  U2HTS_ERROR_CODES u2hts_error = UE_OK;
   config = cfg;
   U2HTS_LOG_INFO("U2HTS firmware built @ %s %s with feature%s", __DATE__,
                  __TIME__,
@@ -291,16 +289,16 @@ inline U2HTS_ERROR_CODES u2hts_init(u2hts_config* cfg) {
   }
 
   if (config->bus_type == UB_I2C && !strcmp(config->controller, "auto"))
-    ret = u2hts_scan_touch_controller(&touch_controller);
+    u2hts_error = u2hts_scan_touch_controller(&touch_controller);
   else {
     U2HTS_LOG_INFO("Controller: %s", cfg->controller);
     touch_controller = u2hts_get_touch_controller_by_name(cfg->controller);
-    if (!touch_controller) ret = UE_NCOMPAT;
+    if (!touch_controller) u2hts_error = UE_NCOMPAT;
   }
 
-  if (ret) {
+  if (u2hts_error) {
     U2HTS_LOG_ERROR("Failed to get touch controller");
-    return ret;
+    return u2hts_error;
   }
 
   touch_controller->i2c_addr =
@@ -317,9 +315,9 @@ inline U2HTS_ERROR_CODES u2hts_init(u2hts_config* cfg) {
       break;
     case UB_SPI:
       u2hts_spi_init(
-          config->spi_cpol != 0xFF ? config->spi_cpol
+          config->spi_cpol != 0x03 ? config->spi_cpol
                                    : touch_controller->spi_cpol,
-          config->spi_cpha != 0xFF ? config->spi_cpha
+          config->spi_cpha != 0x03 ? config->spi_cpha
                                    : touch_controller->spi_cpha,
           config->spi_speed ? config->spi_speed : touch_controller->spi_speed);
       break;
@@ -360,7 +358,7 @@ inline U2HTS_ERROR_CODES u2hts_init(u2hts_config* cfg) {
   u2hts_usb_init();
   if (!config->polling_mode) u2hts_ts_irq_setup(touch_controller->irq_type);
   U2HTS_LOG_DEBUG("Exit %s", __func__);
-  return ret;
+  return u2hts_error;
 }
 
 inline static void u2hts_handle_touch() {
@@ -415,7 +413,7 @@ inline static void u2hts_handle_touch() {
   U2HTS_LOG_DEBUG("report.scan_time = %d, report.tp_count = %d",
                   u2hts_report.scan_time, u2hts_report.tp_count);
   u2hts_delay_ms(config->report_delay);
-  u2hts_usb_report(&u2hts_report, U2HTS_HID_TP_REPORT_ID);
+  u2hts_usb_report(U2HTS_HID_REPORT_TP_ID, &u2hts_report);
   u2hts_previous_report = u2hts_report;
   U2HTS_SET_TPS_REMAIN_FLAG((u2hts_previous_report.tp_count > 0));
   u2hts_tps_release_timeout = 0;

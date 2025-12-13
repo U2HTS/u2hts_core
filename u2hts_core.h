@@ -8,10 +8,10 @@
 #ifndef _U2HTS_CORE_H_
 #define _U2HTS_CORE_H_
 
-#include <stdbool.h> 
-#include <stdint.h> // uint
-#include <stdio.h> // printf
-#include <string.h> // memcpy
+#include <stdbool.h>
+#include <stdint.h>  // uint
+#include <stdio.h>   // printf
+#include <string.h>  // memcpy
 
 #define U2HTS_LOG_LEVEL_ERROR 0
 #define U2HTS_LOG_LEVEL_WARN 1
@@ -25,9 +25,9 @@
 #define U2HTS_DEFAULT_TP_PRESSURE 0x30
 #define U2HTS_LOGICAL_MAX 4096
 
-#define U2HTS_HID_TP_REPORT_ID 1
-#define U2HTS_HID_TP_MAX_COUNT_ID 2
-#define U2HTS_HID_TP_MS_THQA_CERT_ID 3
+#define U2HTS_HID_REPORT_TP_ID 1
+#define U2HTS_HID_REPORT_TP_MAX_COUNT_ID 2
+#define U2HTS_HID_REPORT_TP_MS_THQA_CERT_ID 3
 
 #define U2HTS_CONFIG_ROTATION_0 0
 #define U2HTS_CONFIG_ROTATION_90 1
@@ -203,54 +203,41 @@ void u2hts_led_show_error_code(U2HTS_ERROR_CODES code);
 #ifdef U2HTS_ENABLE_PERSISTENT_CONFIG
 #define U2HTS_CONFIG_MAGIC 0xBA
 
+typedef union {
+  struct {
+    uint8_t magic;
+    bool x_y_swap : 1;
+    bool x_invert : 1;
+    bool y_invert : 1;
+  };
+  uint16_t value;
+} u2hts_config_mask;
+
 inline static void u2hts_save_config(u2hts_config* cfg) {
-  union {
-    struct {
-      uint8_t magic;
-      uint8_t x_y_swap : 1;
-      uint8_t x_invert : 1;
-      uint8_t y_invert : 1;
-    };
-    uint16_t mask;
-  } u2hts_config_mask;
-  u2hts_config_mask.magic = U2HTS_CONFIG_MAGIC;
-  u2hts_config_mask.x_y_swap = cfg->x_y_swap;
-  u2hts_config_mask.x_invert = cfg->x_invert;
-  u2hts_config_mask.y_invert = cfg->y_invert;
-  U2HTS_LOG_DEBUG("%s: mask = 0x%x", __func__, u2hts_config_mask.mask);
-  u2hts_write_config(u2hts_config_mask.mask);
+  u2hts_config_mask mask = {
+      .magic = U2HTS_CONFIG_MAGIC,
+      .x_y_swap = cfg->x_y_swap,
+      .x_invert = cfg->x_invert,
+      .y_invert = cfg->y_invert,
+  };
+  U2HTS_LOG_DEBUG("%s: mask.value = 0x%x", __func__, mask.value);
+  u2hts_write_config(mask.value);
 }
 
 inline static void u2hts_load_config(u2hts_config* cfg) {
-  union {
-    struct {
-      uint8_t magic;
-      uint8_t x_y_swap : 1;
-      uint8_t x_invert : 1;
-      uint8_t y_invert : 1;
-    };
-    uint16_t mask;
-  } u2hts_config_mask;
-  u2hts_config_mask.mask = u2hts_read_config();
-  U2HTS_LOG_DEBUG("%s: mask = 0x%x", __func__, u2hts_config_mask.mask);
-  cfg->x_y_swap = u2hts_config_mask.x_y_swap;
-  cfg->x_invert = u2hts_config_mask.x_invert;
-  cfg->y_invert = u2hts_config_mask.y_invert;
+  u2hts_config_mask mask = {0};
+  mask.value = u2hts_read_config();
+  U2HTS_LOG_DEBUG("%s: mask.value = 0x%x", __func__, mask.value);
+  cfg->x_y_swap = mask.x_y_swap;
+  cfg->x_invert = mask.x_invert;
+  cfg->y_invert = mask.y_invert;
 }
 
 inline static bool u2hts_config_exists() {
-  union {
-    struct {
-      uint8_t magic;
-      uint8_t x_y_swap : 1;
-      uint8_t x_invert : 1;
-      uint8_t y_invert : 1;
-    };
-    uint16_t mask;
-  } u2hts_config_mask;
-  u2hts_config_mask.mask = u2hts_read_config();
-  U2HTS_LOG_DEBUG("%s: mask = 0x%x", __func__, u2hts_config_mask.mask);
-  return (u2hts_config_mask.magic == U2HTS_CONFIG_MAGIC);
+  u2hts_config_mask mask = {0};
+  mask.value = u2hts_read_config();
+  U2HTS_LOG_DEBUG("%s: mask.value = 0x%x", __func__, mask.value);
+  return (mask.magic == U2HTS_CONFIG_MAGIC);
 }
 #endif
 

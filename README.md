@@ -1,1 +1,1 @@
-[U2HTS](https://github.com/U2HTS/U2HTS/blob/main/README.md)
+[U2HTS](https://github.com/U2HTS/U2HTS)

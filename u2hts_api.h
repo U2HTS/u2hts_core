@@ -26,7 +26,7 @@ void u2hts_tprst_set(bool value);
 void u2hts_delay_ms(uint32_t ms);
 void u2hts_delay_us(uint32_t us);
 // get report size by sizeof(u2hts_hid_report)
-void u2hts_usb_report(const void* report, uint8_t report_id);
+void u2hts_usb_report(uint8_t report_id, const void* report);
 bool u2hts_usb_init();
 uint16_t u2hts_get_scan_time();
 void u2hts_led_set(bool on);
