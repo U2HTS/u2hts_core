@@ -315,9 +315,9 @@ inline U2HTS_ERROR_CODES u2hts_init(u2hts_config* cfg) {
       break;
     case UB_SPI:
       u2hts_spi_init(
-          config->spi_cpol != 0x03 ? config->spi_cpol
+          config->spi_cpol != 0xFF ? config->spi_cpol
                                    : touch_controller->spi_cpol,
-          config->spi_cpha != 0x03 ? config->spi_cpha
+          config->spi_cpha != 0xFF ? config->spi_cpha
                                    : touch_controller->spi_cpha,
           config->spi_speed ? config->spi_speed : touch_controller->spi_speed);
       break;
