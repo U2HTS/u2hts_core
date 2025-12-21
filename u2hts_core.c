@@ -443,7 +443,7 @@ inline void u2hts_main() {
       u2hts_ts_irq_set(!config->polling_mode && u2hts_get_usb_status());
 
 #ifdef U2HTS_ENABLE_LED
-      u2hts_led_set(!u2hts_get_usb_status() && u2hts_get_usb_status());
+      u2hts_led_set(!u2hts_get_usb_status());
 #endif
 
       if ((config->polling_mode ? 1 : U2HTS_GET_IRQ_STATUS_FLAG()) &&
