@@ -102,7 +102,8 @@ typedef enum {
   UE_NSLAVE,   // no slave detected on i2c bus
   UE_NCOMPAT,  // no compatible controller found
   UE_NCONF,    // required parameters not configured
-  UE_FSETUP    // failed to setup controller
+  UE_FSETUP,   // failed to setup controller
+  UE_INCFG,    // read config invalid
 } U2HTS_ERROR_CODES;
 
 typedef enum {
@@ -160,7 +161,7 @@ typedef struct {
 
 typedef struct {
   bool (*setup)(U2HTS_BUS_TYPES bus_type);
-  u2hts_touch_controller_config (*get_config)();
+  void (*get_config)(u2hts_touch_controller_config* cfg);
   void (*fetch)(const u2hts_config* cfg, u2hts_hid_report* report);
 } u2hts_touch_controller_operations;
 

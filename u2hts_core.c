@@ -332,12 +332,17 @@ inline U2HTS_ERROR_CODES u2hts_init(u2hts_config* cfg) {
   u2hts_touch_controller_config tc_config = {0};
 
   if (touch_controller->operations->get_config) {
-    tc_config = touch_controller->operations->get_config();
+    touch_controller->operations->get_config(&tc_config);
     U2HTS_LOG_INFO(
         "Controller config: max_tps = %d, x_max = %d, y_max = "
         "%d",
         tc_config.max_tps, tc_config.x_max, tc_config.y_max);
-
+    if (tc_config.max_tps > U2HTS_MAX_TPS ||
+        tc_config.x_max > U2HTS_LOGICAL_MAX ||
+        tc_config.y_max > U2HTS_LOGICAL_MAX) {
+      U2HTS_LOG_ERROR("Config values out of range");
+      return UE_INCFG;
+    }
     config->x_max = (config->x_max) ? config->x_max : tc_config.x_max;
     config->y_max = (config->y_max) ? config->y_max : tc_config.y_max;
     config->max_tps = (config->max_tps) ? config->max_tps : tc_config.max_tps;
