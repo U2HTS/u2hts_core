@@ -42,7 +42,7 @@ static __unused const uint16_t u2hts_configs[] = {0x0, 0x320, 0x620, 0x520};
 
 #ifdef U2HTS_ENABLE_LED
 
-static inline void u2hts_led_flash(uint16_t times) {
+static inline void u2hts_led_blink(uint16_t times) {
   for (uint16_t i = 0; i < times; i++) {
     u2hts_led_set(true);
     u2hts_delay_ms(200);
@@ -52,7 +52,7 @@ static inline void u2hts_led_flash(uint16_t times) {
 }
 
 inline void u2hts_led_show_error_code(U2HTS_ERROR_CODES code) {
-  u2hts_led_flash(code);
+  u2hts_led_blink(code);
   u2hts_delay_ms(1000);
 }
 
@@ -128,7 +128,7 @@ inline void u2hts_apply_config(u2hts_config* cfg, uint8_t config_index) {
                  cfg->x_y_swap, cfg->x_invert, cfg->y_invert);
 }
 
-void u2hts_apply_config_to_tp(const u2hts_config* cfg, u2hts_tp* tp) {
+void u2hts_transform_touch_data(const u2hts_config* cfg, u2hts_tp* tp) {
   U2HTS_LOG_DEBUG("raw data: id = %d, x = %d, y = %d, contact = %d", tp->id,
                   tp->x, tp->y, tp->contact);
   tp->x = (tp->x > cfg->x_max) ? cfg->x_max : tp->x;
@@ -150,9 +150,9 @@ void u2hts_apply_config_to_tp(const u2hts_config* cfg, u2hts_tp* tp) {
 #ifdef U2HTS_ENABLE_KEY
 
 inline static bool u2hts_get_key_timeout(uint32_t ms) {
-  if (u2hts_key_read()) {
+  if (u2hts_usrkey_get()) {
     u2hts_delay_ms(ms);
-    return u2hts_key_read();
+    return u2hts_usrkey_get();
   } else
     return false;
 }
@@ -178,7 +178,7 @@ inline static void u2hts_handle_config() {
               : 0;
       U2HTS_LOG_INFO("switching config %d", config_index);
 #ifdef U2HTS_ENABLE_LED
-      u2hts_led_flash(config_index + 1);
+      u2hts_led_blink(config_index + 1);
 #endif
     } else {
       u2hts_delay_ms(1);
@@ -221,7 +221,7 @@ inline static u2hts_touch_controller* u2hts_get_touch_controller_by_i2c_addr(
   return NULL;
 }
 
-inline static U2HTS_ERROR_CODES u2hts_scan_touch_controller(
+inline static U2HTS_ERROR_CODES u2hts_detect_touch_controller(
     u2hts_touch_controller** tc) {
   uint8_t slave_addr = 0x00;
   // we assume only 1 i2c slave on the i2c bus
@@ -289,7 +289,7 @@ inline U2HTS_ERROR_CODES u2hts_init(u2hts_config* cfg) {
   }
 
   if (config->bus_type == UB_I2C && !strcmp(config->controller, "auto"))
-    u2hts_error = u2hts_scan_touch_controller(&touch_controller);
+    u2hts_error = u2hts_detect_touch_controller(&touch_controller);
   else {
     U2HTS_LOG_INFO("Controller: %s", cfg->controller);
     touch_controller = u2hts_get_touch_controller_by_name(cfg->controller);
@@ -377,7 +377,7 @@ inline static void u2hts_handle_touch() {
   U2HTS_SET_IRQ_STATUS_FLAG(!config->polling_mode);
   if (tp_count == 0 && u2hts_previous_report.tp_count == 0) return;
 
-  u2hts_report.scan_time = u2hts_get_scan_time();
+  u2hts_report.scan_time = u2hts_get_timestamp();
 
   if (u2hts_previous_report.tp_count != u2hts_report.tp_count) {
     uint16_t new_ids_mask = 0;
@@ -424,12 +424,12 @@ inline static void u2hts_handle_touch() {
   u2hts_tps_release_timeout = 0;
 }
 
-inline void u2hts_main() {
+inline void u2hts_task() {
 #ifdef U2HTS_ENABLE_KEY
   if (U2HTS_GET_CONFIG_MODE_FLAG())
     u2hts_handle_config();
   else {
-    if (u2hts_key_read())
+    if (u2hts_usrkey_get())
       U2HTS_SET_CONFIG_MODE_FLAG(u2hts_get_key_timeout(1000));
     else {
 #endif

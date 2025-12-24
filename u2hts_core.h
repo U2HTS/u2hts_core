@@ -180,7 +180,7 @@ typedef struct {
 #include "u2hts_api.h"
 
 U2HTS_ERROR_CODES u2hts_init(u2hts_config* cfg);
-void u2hts_main();
+void u2hts_task();
 uint8_t u2hts_get_max_tps();
 
 void u2hts_i2c_mem_write(uint8_t slave_addr, uint32_t mem_addr,
@@ -190,7 +190,7 @@ void u2hts_i2c_mem_read(uint8_t slave_addr, uint32_t mem_addr,
 
 void u2hts_ts_irq_status_set(bool status);
 void u2hts_apply_config(u2hts_config* cfg, uint8_t config_index);
-void u2hts_apply_config_to_tp(const u2hts_config* cfg, u2hts_tp* tp);
+void u2hts_transform_touch_data(const u2hts_config* cfg, u2hts_tp* tp);
 
 #ifdef U2HTS_ENABLE_LED
 typedef struct {

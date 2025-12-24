@@ -28,11 +28,11 @@ void u2hts_delay_us(uint32_t us);
 // get report size by sizeof(u2hts_hid_report)
 void u2hts_usb_report(uint8_t report_id, const void* report);
 bool u2hts_usb_init();
-uint16_t u2hts_get_scan_time();
+uint16_t u2hts_get_timestamp();
 void u2hts_led_set(bool on);
 void u2hts_write_config(uint16_t cfg);
 uint16_t u2hts_read_config();
-bool u2hts_key_read();
+bool u2hts_usrkey_get();
 // true = okay false = busy
 bool u2hts_get_usb_status();
 
