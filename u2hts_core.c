@@ -240,14 +240,12 @@ inline static U2HTS_ERROR_CODES u2hts_detect_touch_controller(
   *tc = u2hts_get_touch_controller_by_i2c_addr(slave_addr);
   if (!*tc) {
     U2HTS_LOG_ERROR(
-        "No touch controller with i2c addr 0x%x compatible was found",
+        "Device %x on I2C bus does not match any controller",
         slave_addr);
     return UE_NCOMPAT;
   }
 
   U2HTS_LOG_INFO("Found controller %s @ addr 0x%x", (*tc)->name, slave_addr);
-  U2HTS_LOG_INFO(
-      "If controller mismatched, try specify controller name in config");
   return UE_OK;
 }
 
@@ -280,10 +278,10 @@ inline U2HTS_ERROR_CODES u2hts_init(u2hts_config* cfg) {
 #endif
 
   if (config->bus_type == UB_I2C)
-    u2hts_i2c_init(100 * 1000);  // 100 KHz for device scan
+    u2hts_i2c_init(100 * 1000);  // 100 KHz for controller detection
 
   if (config->bus_type != UB_I2C && !strcmp(config->controller, "auto")) {
-    U2HTS_LOG_ERROR("Bus type %d does not support scan devices",
+    U2HTS_LOG_ERROR("Bus type %d does not support controller detection",
                     config->bus_type);
     return UE_NCONF;
   }
@@ -361,7 +359,7 @@ inline U2HTS_ERROR_CODES u2hts_init(u2hts_config* cfg) {
       config->x_max, config->y_max, config->max_tps, config->x_y_swap,
       config->x_invert, config->y_invert, config->polling_mode);
   u2hts_usb_init();
-  if (!config->polling_mode) u2hts_ts_irq_setup(touch_controller->irq_type);
+  if (!config->polling_mode) u2hts_ts_irq_init(touch_controller->irq_type);
   U2HTS_LOG_DEBUG("Exit %s", __func__);
   return u2hts_error;
 }
