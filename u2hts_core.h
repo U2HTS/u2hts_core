@@ -99,8 +99,8 @@
 
 typedef enum {
   UE_OK,       // No error
-  UE_NSLAVE,   // no slave detected on i2c bus
-  UE_NCOMPAT,  // no compatible controller found
+  UE_NSLAVE,   // no slave on i2c bus
+  UE_NCOMPAT,  // no driver matched
   UE_NCONF,    // required parameters not configured
   UE_FSETUP,   // failed to setup controller
   UE_INCFG,    // read config invalid
@@ -117,6 +117,18 @@ typedef enum {
   UB_I2C,
   UB_SPI,
 } U2HTS_BUS_TYPES;
+
+/*
+  Some controller constantly reporting finger coordinates, even if fingers are
+  not moving. 
+  Others reports after a finger moving event triggered, usually
+  use a bit/byte to indicate the finger still presents or not.
+*/
+
+typedef enum {
+  UTC_REPORT_MODE_CONTINOUS,
+  UTC_REPORT_MODE_EVENT
+} U2HTS_TOUCH_CONTROLLER_REPORT_MODE;
 
 typedef struct __packed {
   bool contact : 1;
@@ -162,18 +174,19 @@ typedef struct {
 typedef struct {
   bool (*setup)(U2HTS_BUS_TYPES bus_type);
   void (*get_config)(u2hts_touch_controller_config* cfg);
-  void (*fetch)(const u2hts_config* cfg, u2hts_hid_report* report);
+  bool (*fetch)(const u2hts_config* cfg, u2hts_hid_report* report);
 } u2hts_touch_controller_operations;
 
 typedef struct {
   const char* name;
+  U2HTS_TOUCH_CONTROLLER_REPORT_MODE report_mode;
+  U2HTS_IRQ_TYPES irq_type;
   uint8_t i2c_addr;
   uint8_t alt_i2c_addr;  // some controller can have configurable slave address
   uint32_t i2c_speed;
   uint8_t spi_cpol;
   uint8_t spi_cpha;
   uint32_t spi_speed;
-  U2HTS_IRQ_TYPES irq_type;
   u2hts_touch_controller_operations* operations;
 } u2hts_touch_controller;
 
