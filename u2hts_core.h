@@ -11,6 +11,7 @@
 #include <stdbool.h>
 #include <stdint.h>  // uint
 #include <stdio.h>   // printf
+#include <stdlib.h>  // atoi etc
 #include <string.h>  // memcpy
 
 #define U2HTS_LOG_LEVEL_ERROR 0
@@ -33,6 +34,9 @@
 #define U2HTS_CONFIG_ROTATION_90 1
 #define U2HTS_CONFIG_ROTATION_180 2
 #define U2HTS_CONFIG_ROTATION_270 3
+
+#define U2HTS_CUSTOM_CONFIG_STR_MAX_TOTAL_LENGTH 512
+#define U2HTS_CUSTOM_CONFIG_STR_MAX_KEY_LENGTH 128
 
 #define U2HTS_UNUSED(x) (void)(x)
 
@@ -97,6 +101,15 @@
           ".u2hts_touch_controllers"))) static const u2hts_touch_controller* \
       u2hts_touch_controller_##controller = &controller
 
+#define U2HTS_SET_TP_COUNT_SAFE(TP_COUNT)                             \
+  do {                                                                \
+    report->tp_count = TP_COUNT;                                      \
+    if (!report->tp_count) return false;                              \
+    report->tp_count = (report->tp_count < cfg->coord_config.max_tps) \
+                           ? report->tp_count                         \
+                           : cfg->coord_config.max_tps;               \
+  } while (0)
+
 typedef enum {
   UE_OK,       // No error
   UE_NSLAVE,   // no slave on i2c bus
@@ -120,7 +133,7 @@ typedef enum {
 
 /*
   Some controller constantly reporting finger coordinates, even if fingers are
-  not moving. 
+  not moving.
   Others reports after a finger moving event triggered, usually
   use a bit/byte to indicate the finger still presents or not.
 */
@@ -152,27 +165,40 @@ typedef struct {
   uint8_t max_tps;
 } u2hts_touch_controller_config;
 
-typedef struct {
-  const char* controller;
-  U2HTS_BUS_TYPES bus_type;
-  uint32_t i2c_speed;  // Hz
-  uint8_t i2c_addr;
-  uint32_t spi_speed;  // Hz
-  uint8_t spi_cpol;
-  uint8_t spi_cpha;
+typedef struct __packed {
+  uint8_t addr;
+  uint32_t speed_hz;
+} u2hts_i2c_config;
+
+typedef struct __packed {
+  uint32_t speed_hz;
+  uint8_t cpol;
+  uint8_t cpha;
+} u2hts_spi_config;
+
+typedef struct __packed {
   bool x_y_swap;
   bool x_invert;
   bool y_invert;
   uint16_t x_max;
   uint16_t y_max;
   uint8_t max_tps;
+} u2hts_coord_config;
+
+typedef struct {
+  const char* controller;
+  U2HTS_BUS_TYPES bus_type;
+  u2hts_i2c_config i2c_config;
+  u2hts_spi_config spi_config;
+  u2hts_coord_config coord_config;
   U2HTS_IRQ_TYPES irq_type;
   uint32_t report_delay;
   bool polling_mode;
+  const char* custom_controller_config;
 } u2hts_config;
 
 typedef struct {
-  bool (*setup)(U2HTS_BUS_TYPES bus_type);
+  bool (*setup)(U2HTS_BUS_TYPES bus_type, const char* custom_controller_config);
   void (*get_config)(u2hts_touch_controller_config* cfg);
   bool (*fetch)(const u2hts_config* cfg, u2hts_hid_report* report);
 } u2hts_touch_controller_operations;
@@ -181,12 +207,9 @@ typedef struct {
   const char* name;
   U2HTS_TOUCH_CONTROLLER_REPORT_MODE report_mode;
   U2HTS_IRQ_TYPES irq_type;
-  uint8_t i2c_addr;
+  u2hts_i2c_config i2c_config;
   uint8_t alt_i2c_addr;  // some controller can have configurable slave address
-  uint32_t i2c_speed;
-  uint8_t spi_cpol;
-  uint8_t spi_cpha;
-  uint32_t spi_speed;
+  u2hts_spi_config spi_config;
   u2hts_touch_controller_operations* operations;
 } u2hts_touch_controller;
 
@@ -204,6 +227,15 @@ void u2hts_i2c_mem_read(uint8_t slave_addr, uint32_t mem_addr,
 void u2hts_ts_irq_status_set(bool status);
 void u2hts_apply_config(u2hts_config* cfg, uint8_t config_index);
 void u2hts_transform_touch_data(const u2hts_config* cfg, u2hts_tp* tp);
+size_t u2hts_get_custom_config(const char* config_name, uint8_t* buf,
+                               size_t bufsiz);
+inline static int32_t u2hts_get_custom_config_i32(const char* config_name) {
+  uint8_t buf[U2HTS_CUSTOM_CONFIG_STR_MAX_KEY_LENGTH] = {0};
+  if (u2hts_get_custom_config(config_name, buf, sizeof(buf)))
+    return atoi((const char*)buf);
+  else
+    return -1;
+}
 
 #ifdef U2HTS_ENABLE_LED
 typedef struct {
@@ -230,9 +262,9 @@ typedef union {
 inline static void u2hts_save_config(u2hts_config* cfg) {
   u2hts_config_mask mask = {
       .magic = U2HTS_CONFIG_MAGIC,
-      .x_y_swap = cfg->x_y_swap,
-      .x_invert = cfg->x_invert,
-      .y_invert = cfg->y_invert,
+      .x_y_swap = cfg->coord_config.x_y_swap,
+      .x_invert = cfg->coord_config.x_invert,
+      .y_invert = cfg->coord_config.y_invert,
   };
   U2HTS_LOG_DEBUG("%s: mask.value = 0x%x", __func__, mask.value);
   u2hts_write_config(mask.value);
@@ -242,9 +274,9 @@ inline static void u2hts_load_config(u2hts_config* cfg) {
   u2hts_config_mask mask = {0};
   mask.value = u2hts_read_config();
   U2HTS_LOG_DEBUG("%s: mask.value = 0x%x", __func__, mask.value);
-  cfg->x_y_swap = mask.x_y_swap;
-  cfg->x_invert = mask.x_invert;
-  cfg->y_invert = mask.y_invert;
+  cfg->coord_config.x_y_swap = mask.x_y_swap;
+  cfg->coord_config.x_invert = mask.x_invert;
+  cfg->coord_config.y_invert = mask.y_invert;
 }
 
 inline static bool u2hts_config_exists() {
