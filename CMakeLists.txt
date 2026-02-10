@@ -19,7 +19,7 @@ target_include_directories(u2hts_core PUBLIC
     ${CMAKE_CURRENT_LIST_DIR}
 )
 
-target_link_libraries(u2hts_core PRIVATE
+target_link_libraries(u2hts_core PUBLIC
     u2hts_core_settings)
 
 target_compile_definitions(u2hts_core PRIVATE

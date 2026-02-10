@@ -239,8 +239,8 @@ size_t u2hts_get_custom_config(const char* config_name, uint8_t* buf,
   while (token) {
     size_t offset = strspn(cfgnamebuf, token);
     if (offset) {
-      strncpy(buf, token + offset, bufsiz);
-      return strlen(buf);
+      strncpy((char *)buf, token + offset, bufsiz);
+      return strlen((char *)buf);
     }
     token = strtok(NULL, " ");
   }
