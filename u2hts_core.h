@@ -188,7 +188,9 @@ typedef struct __packed {
 typedef struct {
   const char* controller;
   U2HTS_BUS_TYPES bus_type;
+  bool override_i2c_config;
   u2hts_i2c_config i2c_config;
+  bool override_spi_config;
   u2hts_spi_config spi_config;
   u2hts_coord_config coord_config;
   U2HTS_IRQ_TYPES irq_type;
@@ -198,7 +200,7 @@ typedef struct {
 } u2hts_config;
 
 typedef struct {
-  bool (*setup)(U2HTS_BUS_TYPES bus_type, const char* custom_controller_config);
+  bool (*setup)(U2HTS_BUS_TYPES bus_type);
   void (*get_config)(u2hts_touch_controller_config* cfg);
   bool (*fetch)(const u2hts_config* cfg, u2hts_hid_report* report);
 } u2hts_touch_controller_operations;

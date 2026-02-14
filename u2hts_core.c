@@ -229,6 +229,7 @@ inline static u2hts_touch_controller* u2hts_get_touch_controller_by_i2c_addr(
 
 size_t u2hts_get_custom_config(const char* config_name, uint8_t* buf,
                                size_t bufsiz) {
+  if (!config->custom_controller_config) return 0;
   char config_str_buf[U2HTS_CUSTOM_CONFIG_STR_MAX_TOTAL_LENGTH],
       cfgnamebuf[U2HTS_CUSTOM_CONFIG_STR_MAX_KEY_LENGTH] = {0};
   strncpy(config_str_buf, config->custom_controller_config,
@@ -239,8 +240,8 @@ size_t u2hts_get_custom_config(const char* config_name, uint8_t* buf,
   while (token) {
     size_t offset = strspn(cfgnamebuf, token);
     if (offset) {
-      strncpy((char *)buf, token + offset, bufsiz);
-      return strlen((char *)buf);
+      strncpy((char*)buf, token + offset, bufsiz);
+      return strlen((char*)buf);
     }
     token = strtok(NULL, " ");
   }
@@ -323,33 +324,26 @@ inline U2HTS_ERROR_CODES u2hts_init(u2hts_config* cfg) {
     return u2hts_error;
   }
 
-  touch_controller->i2c_config.addr = (config->i2c_config.addr)
-                                          ? config->i2c_config.addr
-                                          : touch_controller->i2c_config.addr;
+  if (config->override_i2c_config)
+    touch_controller->i2c_config = config->i2c_config;
+
+  if (config->override_spi_config)
+    touch_controller->spi_config = config->spi_config;
 
   touch_controller->irq_type =
       (config->irq_type) ? config->irq_type : touch_controller->irq_type;
 
   switch (config->bus_type) {
     case UB_I2C:
-      // override
-      u2hts_i2c_set_speed(config->i2c_config.speed_hz
-                              ? config->i2c_config.speed_hz
-                              : touch_controller->i2c_config.speed_hz);
+      u2hts_i2c_set_speed(touch_controller->i2c_config.speed_hz);
       break;
     case UB_SPI:
-      u2hts_spi_init(
-          config->spi_config.cpol != 0xFF ? config->spi_config.cpol
-                                          : touch_controller->spi_config.cpol,
-          config->spi_config.cpha != 0xFF ? config->spi_config.cpha
-                                          : touch_controller->spi_config.cpha,
-          config->spi_config.speed_hz ? config->spi_config.speed_hz
-                                      : touch_controller->spi_config.speed_hz);
+      u2hts_spi_init(&touch_controller->spi_config);
       break;
   }
 
   // setup controller
-  if (!touch_controller->operations->setup(config->bus_type, "")) {
+  if (!touch_controller->operations->setup(config->bus_type)) {
     U2HTS_LOG_ERROR("Failed to setup controller: %s", touch_controller->name);
     return UE_FSETUP;
   }
