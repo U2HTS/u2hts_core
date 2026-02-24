@@ -133,23 +133,51 @@ inline void u2hts_apply_config(u2hts_config* cfg, uint8_t config_index) {
                  cfg->coord_config.y_invert);
 }
 
-void u2hts_transform_touch_data(const u2hts_config* cfg, u2hts_tp* tp) {
-  U2HTS_LOG_DEBUG("raw data: contact = %d, id = %d, x = %d, y = %d",
-                  tp->contact, tp->id, tp->x, tp->y);
-  tp->x = (tp->x > cfg->coord_config.x_max) ? cfg->coord_config.x_max : tp->x;
-  tp->y = (tp->y > cfg->coord_config.y_max) ? cfg->coord_config.y_max : tp->y;
-  tp->x = U2HTS_MAP_VALUE(tp->x, cfg->coord_config.x_max, U2HTS_LOGICAL_MAX);
-  tp->y = U2HTS_MAP_VALUE(tp->y, cfg->coord_config.y_max, U2HTS_LOGICAL_MAX);
-  if (cfg->coord_config.x_y_swap) {
-    tp->x ^= tp->y;
-    tp->y ^= tp->x;
-    tp->x ^= tp->y;
+void u2hts_set_tp_count(uint8_t tp_count) {
+  u2hts_report.tp_count = tp_count > config->coord_config.max_tps
+                              ? tp_count
+                              : config->coord_config.max_tps;
+}
+
+void u2hts_set_tp(uint8_t tp_index, bool contact, uint8_t id, uint16_t x,
+                  uint16_t y, uint8_t width, uint8_t height, uint8_t pressure) {
+  U2HTS_LOG_DEBUG(
+      "index = %d, contact = %d, id = %d, x = %d, y = %d, width = %d, height = "
+      "%d, "
+      "pressure = %d",
+      tp_index, contact, id, x, y, width, height, pressure);
+  if (tp_index >= U2HTS_MAX_TPS) return;
+  u2hts_report.tp[tp_index].contact = contact;
+  u2hts_report.tp[tp_index].id = id;
+  u2hts_report.tp[tp_index].x =
+      (x > config->coord_config.x_max)
+          ? U2HTS_LOGICAL_MAX
+          : U2HTS_MAP_VALUE(x, config->coord_config.x_max, U2HTS_LOGICAL_MAX);
+  u2hts_report.tp[tp_index].y =
+      (y > config->coord_config.y_max)
+          ? U2HTS_LOGICAL_MAX
+          : U2HTS_MAP_VALUE(y, config->coord_config.y_max, U2HTS_LOGICAL_MAX);
+  if (config->coord_config.x_y_swap) {
+    u2hts_report.tp[tp_index].x ^= u2hts_report.tp[tp_index].y;
+    u2hts_report.tp[tp_index].y ^= u2hts_report.tp[tp_index].x;
+    u2hts_report.tp[tp_index].x ^= u2hts_report.tp[tp_index].y;
   }
-  if (cfg->coord_config.x_invert) tp->x = U2HTS_LOGICAL_MAX - tp->x;
-  if (cfg->coord_config.y_invert) tp->y = U2HTS_LOGICAL_MAX - tp->y;
-  tp->width = (tp->width) ? tp->width : U2HTS_DEFAULT_TP_WIDTH;
-  tp->height = (tp->height) ? tp->height : U2HTS_DEFAULT_TP_HEIGHT;
-  tp->pressure = (tp->pressure) ? tp->pressure : U2HTS_DEFAULT_TP_PRESSURE;
+  if (config->coord_config.x_invert)
+    u2hts_report.tp[tp_index].x =
+        U2HTS_LOGICAL_MAX - u2hts_report.tp[tp_index].x;
+  if (config->coord_config.y_invert)
+    u2hts_report.tp[tp_index].y =
+        U2HTS_LOGICAL_MAX - u2hts_report.tp[tp_index].y;
+#ifdef U2HTS_ENABLE_COMPACT_REPORT
+  U2HTS_UNUSED(width);
+  U2HTS_UNUSED(height);
+  U2HTS_UNUSED(pressure);
+#else
+  u2hts_report.tp[tp_index].width = width ? width : U2HTS_DEFAULT_TP_WIDTH;
+  u2hts_report.tp[tp_index].height = height ? height : U2HTS_DEFAULT_TP_HEIGHT;
+  u2hts_report.tp[tp_index].pressure =
+      pressure ? pressure : U2HTS_DEFAULT_TP_PRESSURE;
+#endif
 }
 
 #ifdef U2HTS_ENABLE_KEY
@@ -400,7 +428,7 @@ inline static void u2hts_handle_touch() {
   U2HTS_SET_IRQ_STATUS_FLAG(config->polling_mode);
   memset(&u2hts_report, 0x00, sizeof(u2hts_report));
   for (uint8_t i = 0; i < U2HTS_MAX_TPS; i++) u2hts_report.tp[i].id = 0x7F;
-  if (!touch_controller->operations->fetch(config, &u2hts_report) &&
+  if (!touch_controller->operations->fetch() &&
       u2hts_previous_report.tp_count == 0 /* release tp */) {
     U2HTS_LOG_WARN(
         "Failed to fetch touch data, tp_count = %d, previous_tp_count = %d",
@@ -436,7 +464,14 @@ inline static void u2hts_handle_touch() {
     u2hts_tp_ids_mask = new_ids_mask;
   }
 
-  for (uint8_t i = 0; i < u2hts_report.tp_count; i++)
+  for (uint8_t i = 0; i < u2hts_report.tp_count; i++) {
+#ifdef U2HTS_USE_COMPAT_REPORT
+    U2HTS_LOG_DEBUG(
+        "report.tp[%d].contact = %d, report.tp[i].x = %d, "
+        "report.tp[i].y = %d, report.tp[i].id = %d" i,
+        u2hts_report.tp[i].contact, u2hts_report.tp[i].x, u2hts_report.tp[i].y,
+        u2hts_report.tp[i].id);
+#else
     U2HTS_LOG_DEBUG(
         "report.tp[%d].contact = %d, report.tp[i].x = %d, "
         "report.tp[i].y = %d, report.tp[i].height = %d, "
@@ -447,6 +482,8 @@ inline static void u2hts_handle_touch() {
         u2hts_report.tp[i].y, u2hts_report.tp[i].height,
         u2hts_report.tp[i].width, u2hts_report.tp[i].pressure,
         u2hts_report.tp[i].id);
+#endif
+  }
 
   U2HTS_LOG_DEBUG("report.scan_time = %d, report.tp_count = %d",
                   u2hts_report.scan_time, u2hts_report.tp_count);

@@ -24,7 +24,7 @@
 #define U2HTS_DEFAULT_TP_WIDTH 0x30
 #define U2HTS_DEFAULT_TP_HEIGHT 0x30
 #define U2HTS_DEFAULT_TP_PRESSURE 0x30
-#define U2HTS_LOGICAL_MAX 4096
+#define U2HTS_LOGICAL_MAX 4095
 
 #define U2HTS_HID_REPORT_TP_ID 1
 #define U2HTS_HID_REPORT_TP_MAX_COUNT_ID 2
@@ -101,13 +101,14 @@
           ".u2hts_touch_controllers"))) static const u2hts_touch_controller* \
       u2hts_touch_controller_##controller = &controller
 
-#define U2HTS_SET_TP_COUNT_SAFE(TP_COUNT)                             \
-  do {                                                                \
-    report->tp_count = TP_COUNT;                                      \
-    if (!report->tp_count) return false;                              \
-    report->tp_count = (report->tp_count < cfg->coord_config.max_tps) \
-                           ? report->tp_count                         \
-                           : cfg->coord_config.max_tps;               \
+void u2hts_set_tp_count(uint8_t tp_count);
+#define U2HTS_SET_TP_COUNT_SAFE(TP_COUNT) \
+  do {                                    \
+    if (TP_COUNT)                         \
+      u2hts_set_tp_count(TP_COUNT);       \
+    else                                  \
+      return false;                       \
+                                          \
   } while (0)
 
 typedef enum {
@@ -143,6 +144,20 @@ typedef enum {
   UTC_REPORT_MODE_EVENT
 } U2HTS_TOUCH_CONTROLLER_REPORT_MODE;
 
+#ifdef U2HTS_ENABLE_COMPACT_REPORT
+typedef struct __packed {
+  bool contact : 1;
+  uint8_t id : 7;
+  uint16_t x : 12;
+  uint16_t y : 12;
+} u2hts_tp;
+
+typedef struct __packed {
+  u2hts_tp tp[U2HTS_MAX_TPS];
+  uint16_t scan_time;
+  uint8_t tp_count;
+} u2hts_hid_report;
+#else
 typedef struct __packed {
   bool contact : 1;
   uint8_t id : 7;
@@ -158,6 +173,7 @@ typedef struct __packed {
   uint16_t scan_time;
   uint8_t tp_count;
 } u2hts_hid_report;
+#endif
 
 typedef struct {
   uint16_t x_max;
@@ -202,7 +218,7 @@ typedef struct {
 typedef struct {
   bool (*setup)(U2HTS_BUS_TYPES bus_type);
   void (*get_config)(u2hts_touch_controller_config* cfg);
-  bool (*fetch)(const u2hts_config* cfg, u2hts_hid_report* report);
+  bool (*fetch)();
 } u2hts_touch_controller_operations;
 
 typedef struct {
@@ -228,7 +244,8 @@ void u2hts_i2c_mem_read(uint8_t slave_addr, uint32_t mem_addr,
 
 void u2hts_ts_irq_status_set(bool status);
 void u2hts_apply_config(u2hts_config* cfg, uint8_t config_index);
-void u2hts_transform_touch_data(const u2hts_config* cfg, u2hts_tp* tp);
+void u2hts_set_tp(uint8_t tp_index, bool contact, uint8_t id, uint16_t x,
+                  uint16_t y, uint8_t width, uint8_t height, uint8_t pressure);
 size_t u2hts_get_custom_config(const char* config_name, uint8_t* buf,
                                size_t bufsiz);
 inline static int32_t u2hts_get_custom_config_i32(const char* config_name) {
