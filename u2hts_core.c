@@ -135,8 +135,8 @@ inline void u2hts_apply_config(u2hts_config* cfg, uint8_t config_index) {
 
 void u2hts_set_tp_count(uint8_t tp_count) {
   u2hts_report.tp_count = tp_count > config->coord_config.max_tps
-                              ? tp_count
-                              : config->coord_config.max_tps;
+                              ? config->coord_config.max_tps
+                              : tp_count;
 }
 
 void u2hts_set_tp(uint8_t tp_index, bool contact, uint8_t id, uint16_t x,
@@ -430,7 +430,7 @@ inline static void u2hts_handle_touch() {
   for (uint8_t i = 0; i < U2HTS_MAX_TPS; i++) u2hts_report.tp[i].id = 0x7F;
   if (!touch_controller->operations->fetch() &&
       u2hts_previous_report.tp_count == 0 /* release tp */) {
-    U2HTS_LOG_WARN(
+    U2HTS_LOG_DEBUG(
         "Failed to fetch touch data, tp_count = %d, previous_tp_count = %d",
         u2hts_report.tp_count, u2hts_previous_report.tp_count);
     return;
