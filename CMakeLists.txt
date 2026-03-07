@@ -20,7 +20,8 @@ target_include_directories(u2hts_core PUBLIC
 )
 
 target_link_libraries(u2hts_core PUBLIC
-    u2hts_core_settings)
+    u2hts_core_settings
+)
 
 target_compile_definitions(u2hts_core PRIVATE
     U2HTS_GIT_SHA="${U2HTS_GIT_SHA}"
