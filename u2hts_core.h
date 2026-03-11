@@ -128,7 +128,7 @@ typedef enum {
   UE_NCOMPAT,  // no driver matched
   UE_NCONF,    // required parameters not configured
   UE_FSETUP,   // failed to setup controller
-  UE_INCFG,    // read config invalid
+  UE_INCFG,    // config values out of range
 } U2HTS_ERROR_CODES;
 
 typedef enum {

@@ -128,9 +128,6 @@ inline void u2hts_apply_config(u2hts_config* cfg, uint8_t config_index) {
   cfg->coord_config.x_y_swap = u2hts_config_mask.x_y_swap;
   cfg->coord_config.x_invert = u2hts_config_mask.x_invert;
   cfg->coord_config.y_invert = u2hts_config_mask.y_invert;
-  U2HTS_LOG_INFO("Applyed config : x_y_swap = %d, x_invert = %d, y_invert = %d",
-                 cfg->coord_config.x_y_swap, cfg->coord_config.x_invert,
-                 cfg->coord_config.y_invert);
 }
 
 void u2hts_set_tp_count(uint8_t tp_count) {
@@ -220,6 +217,10 @@ inline static void u2hts_handle_config() {
   } while (u2hts_config_timeout < U2HTS_CONFIG_TIMEOUT);
   U2HTS_LOG_INFO("Exit config mode");
   u2hts_apply_config(config, config_index);
+  U2HTS_LOG_DEBUG(
+      "Applyed config : x_y_swap = %d, x_invert = %d, y_invert = %d",
+      cfg->coord_config.x_y_swap, cfg->coord_config.x_invert,
+      cfg->coord_config.y_invert);
 #ifdef U2HTS_ENABLE_PERSISTENT_CONFIG
   U2HTS_LOG_INFO("Saving config");
   u2hts_save_config(config);
@@ -380,15 +381,12 @@ inline U2HTS_ERROR_CODES u2hts_init(u2hts_config* cfg) {
 
   if (config->coord_config.x_max && config->coord_config.y_max &&
       config->coord_config.max_tps) {
-    config->coord_config.x_max = (config->coord_config.x_max)
-                                     ? config->coord_config.x_max
-                                     : tc_config.x_max;
-    config->coord_config.y_max = (config->coord_config.y_max)
-                                     ? config->coord_config.y_max
-                                     : tc_config.y_max;
-    config->coord_config.max_tps = (config->coord_config.max_tps)
-                                       ? config->coord_config.max_tps
-                                       : tc_config.max_tps;
+    if (config->coord_config.x_max > U2HTS_LOGICAL_MAX ||
+        config->coord_config.y_max > U2HTS_LOGICAL_MAX ||
+        config->coord_config.max_tps > U2HTS_MAX_TPS) {
+      U2HTS_LOG_ERROR("Config values out of range");
+      return UE_INCFG;
+    }
   } else {
     if (touch_controller->operations->get_config) {
       touch_controller->operations->get_config(&tc_config);
@@ -401,6 +399,10 @@ inline U2HTS_ERROR_CODES u2hts_init(u2hts_config* cfg) {
           tc_config.y_max > U2HTS_LOGICAL_MAX) {
         U2HTS_LOG_ERROR("Config values out of range");
         return UE_INCFG;
+      } else {
+        config->coord_config.x_max = tc_config.x_max;
+        config->coord_config.y_max = tc_config.y_max;
+        config->coord_config.max_tps = tc_config.max_tps;
       }
     } else {
       U2HTS_LOG_ERROR(
@@ -508,7 +510,6 @@ inline void u2hts_task() {
 #endif
       if (!touch_controller->report_mode) {
         if (U2HTS_GET_TPS_REMAIN_FLAG()) {
-          // 10 ms
           if (u2hts_tps_release_timeout > U2HTS_TPS_RELEASE_TIMEOUT &&
               u2hts_get_usb_status()) {
             U2HTS_LOG_DEBUG("releasing remain tps");
@@ -526,7 +527,7 @@ inline void u2hts_task() {
       u2hts_led_set(!u2hts_get_usb_status());
 #endif
 
-      if ((config->polling_mode ? 1 : U2HTS_GET_IRQ_STATUS_FLAG()) &&
+      if ((config->polling_mode ? true : U2HTS_GET_IRQ_STATUS_FLAG()) &&
           u2hts_get_usb_status())
         u2hts_handle_touch();
 
