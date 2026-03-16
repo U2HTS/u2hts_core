@@ -51,8 +51,13 @@
 
 #define U2HTS_UNUSED(x) (void)(x)
 
+#ifndef U2HTS_SWAP16
 #define U2HTS_SWAP16(x) __builtin_bswap16(x)
+#endif
+
+#ifndef U2HTS_SWAP32
 #define U2HTS_SWAP32(x) __builtin_bswap32(x)
+#endif
 
 #if U2HTS_LOG_LEVEL >= U2HTS_LOG_LEVEL_ERROR
 #define U2HTS_LOG_ERROR(...) \
@@ -119,7 +124,6 @@ void u2hts_set_tp_count(uint8_t tp_count);
       u2hts_set_tp_count(TP_COUNT);       \
     else                                  \
       return false;                       \
-                                          \
   } while (0)
 
 typedef enum {
