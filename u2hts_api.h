@@ -26,7 +26,7 @@ void u2hts_tprst_set(bool value);
 void u2hts_delay_ms(uint32_t ms);
 void u2hts_delay_us(uint32_t us);
 void u2hts_usb_report(uint8_t report_id, const u2hts_hid_report* report);
-bool u2hts_usb_init();
+void u2hts_usb_init();
 uint16_t u2hts_get_timestamp();
 void u2hts_led_set(bool on);
 void u2hts_write_config(uint16_t cfg);

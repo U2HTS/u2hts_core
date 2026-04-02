@@ -129,7 +129,7 @@ void u2hts_set_tp_count(uint8_t tp_count);
 typedef enum {
   UE_OK,       // No error
   UE_NSLAVE,   // no slave on i2c bus
-  UE_NCOMPAT,  // no driver matched
+  UE_NCOMPAT,  // no controller matched
   UE_NCONF,    // required parameters not configured
   UE_FSETUP,   // failed to setup controller
   UE_INCFG,    // config values out of range

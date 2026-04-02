@@ -219,8 +219,8 @@ inline static void u2hts_handle_config() {
   u2hts_apply_config(config, config_index);
   U2HTS_LOG_DEBUG(
       "Applyed config : x_y_swap = %d, x_invert = %d, y_invert = %d",
-      cfg->coord_config.x_y_swap, cfg->coord_config.x_invert,
-      cfg->coord_config.y_invert);
+      config->coord_config.x_y_swap, config->coord_config.x_invert,
+      config->coord_config.y_invert);
 #ifdef U2HTS_ENABLE_PERSISTENT_CONFIG
   U2HTS_LOG_INFO("Saving config");
   u2hts_save_config(config);
@@ -280,13 +280,13 @@ size_t u2hts_get_custom_config(const char* config_name, uint8_t* buf,
 inline static U2HTS_ERROR_CODES u2hts_detect_touch_controller(
     u2hts_touch_controller** tc) {
   uint8_t slave_addr = 0x00;
-  // we assume only 1 i2c slave on the i2c bus
   U2HTS_LOG_INFO("Scanning i2c slaves...");
-  for (uint8_t i = 0x00; i < 0x7F; i++)
+  for (uint8_t i = 0x01; i < 0x7F; i++)
     if (u2hts_i2c_detect_slave(i)) {
       slave_addr = i;
       break;
-    }
+    } else
+      U2HTS_LOG_DEBUG("No slave on 0x%x", i);
 
   if (!slave_addr) {
     U2HTS_LOG_ERROR("No slave on i2c bus");
@@ -295,7 +295,7 @@ inline static U2HTS_ERROR_CODES u2hts_detect_touch_controller(
 
   *tc = u2hts_get_touch_controller_by_i2c_addr(slave_addr);
   if (!*tc) {
-    U2HTS_LOG_ERROR("Slave 0x%x on I2C has no known driver match", slave_addr);
+    U2HTS_LOG_ERROR("Slave 0x%x on I2C has no known controller match", slave_addr);
     return UE_NCOMPAT;
   }
 
