@@ -59,6 +59,18 @@
 #define U2HTS_SWAP32(x) __builtin_bswap32(x)
 #endif
 
+#ifndef __packed
+#define __packed __attribute__((__packed__))
+#endif
+
+#ifndef __aligned
+#define __aligned(x) __attribute__((__aligned(x)))
+#endif
+
+#ifndef __unused
+#define __unused __attribute__((__unused__))
+#endif
+
 #if U2HTS_LOG_LEVEL >= U2HTS_LOG_LEVEL_ERROR
 #define U2HTS_LOG_ERROR(...) \
   do {                       \
@@ -124,6 +136,23 @@ void u2hts_set_tp_count(uint8_t tp_count);
       u2hts_set_tp_count(TP_COUNT);       \
     else                                  \
       return false;                       \
+  } while (0)
+
+#define U2HTS_DETECT_TOUCH_CONTROLLER(controller)                        \
+  do {                                                                 \
+    if (!u2hts_i2c_detect_slave(controller.i2c_config.primary_addr)) { \
+      if (controller.i2c_config.alt_addrs) {                           \
+        uint8_t* addr = controller.i2c_config.alt_addrs;               \
+        for (; *addr; addr++) {                                        \
+          if (u2hts_i2c_detect_slave(*addr)) {                         \
+            controller.i2c_config.primary_addr = *addr;                \
+            break;                                                     \
+          }                                                            \
+        }                                                              \
+        if (!*addr) return false;                                      \
+      } else                                                           \
+        return false;                                                  \
+    }                                                                  \
   } while (0)
 
 typedef enum {
@@ -197,7 +226,8 @@ typedef struct {
 } u2hts_touch_controller_config;
 
 typedef struct __packed {
-  uint8_t addr;
+  uint8_t primary_addr;
+  uint8_t* alt_addrs;  // must end with 0!
   uint32_t speed_hz;
 } u2hts_i2c_config;
 
@@ -214,6 +244,8 @@ typedef struct __packed {
   uint16_t x_max;
   uint16_t y_max;
   uint8_t max_tps;
+  int16_t x_offset;
+  int16_t y_offset;
 } u2hts_coord_config;
 
 typedef struct {
@@ -241,9 +273,8 @@ typedef struct {
   U2HTS_TOUCH_CONTROLLER_REPORT_MODE report_mode;
   U2HTS_IRQ_TYPES irq_type;
   u2hts_i2c_config i2c_config;
-  uint8_t alt_i2c_addr;  // some controller can have configurable slave address
   u2hts_spi_config spi_config;
-  u2hts_touch_controller_operations* operations;
+  const u2hts_touch_controller_operations* operations;
 } u2hts_touch_controller;
 
 #include "u2hts_api.h"

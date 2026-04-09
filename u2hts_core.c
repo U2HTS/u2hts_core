@@ -144,6 +144,8 @@ void u2hts_set_tp(uint8_t tp_index, bool contact, uint8_t id, uint16_t x,
       "pressure = %d",
       tp_index, contact, id, x, y, width, height, pressure);
   if (tp_index >= U2HTS_MAX_TPS) return;
+  x += config->coord_config.x_offset;
+  y += config->coord_config.y_offset;
   u2hts_report.tp[tp_index].contact = contact;
   u2hts_report.tp[tp_index].id = id;
   u2hts_report.tp[tp_index].x =
@@ -250,9 +252,12 @@ inline static u2hts_touch_controller* u2hts_get_touch_controller_by_name(
 inline static u2hts_touch_controller* u2hts_get_touch_controller_by_i2c_addr(
     const uint8_t addr) {
   for (u2hts_touch_controller** tc = &__u2hts_touch_controllers_begin;
-       tc < &__u2hts_touch_controllers_end; tc++)
-    if ((*tc)->i2c_config.addr == addr || (*tc)->alt_i2c_addr == addr)
-      return *tc;
+       tc < &__u2hts_touch_controllers_end; tc++) {
+    if ((*tc)->i2c_config.primary_addr == addr) return *tc;
+    if ((*tc)->i2c_config.alt_addrs)
+      for (const uint8_t* alt = (*tc)->i2c_config.alt_addrs; *alt; alt++)
+        if (*alt == addr) return *tc;
+  }
   return NULL;
 }
 
@@ -295,7 +300,8 @@ inline static U2HTS_ERROR_CODES u2hts_detect_touch_controller(
 
   *tc = u2hts_get_touch_controller_by_i2c_addr(slave_addr);
   if (!*tc) {
-    U2HTS_LOG_ERROR("Slave 0x%x on I2C has no known controller match", slave_addr);
+    U2HTS_LOG_ERROR("Slave 0x%x on I2C has no known controller match",
+                    slave_addr);
     return UE_NCOMPAT;
   }
 
@@ -391,10 +397,11 @@ inline U2HTS_ERROR_CODES u2hts_init(u2hts_config* cfg) {
     if (touch_controller->operations->get_config) {
       touch_controller->operations->get_config(&tc_config);
       U2HTS_LOG_INFO(
-          "Controller config: max_tps = %d, x_max = %d, y_max = "
+          "Controller built-in config: max_tps = %d, x_max = %d, y_max = "
           "%d",
           tc_config.max_tps, tc_config.x_max, tc_config.y_max);
-      if (tc_config.max_tps > U2HTS_MAX_TPS ||
+      if (!tc_config.x_max || !tc_config.y_max || !tc_config.max_tps ||
+          tc_config.max_tps > U2HTS_MAX_TPS ||
           tc_config.x_max > U2HTS_LOGICAL_MAX ||
           tc_config.y_max > U2HTS_LOGICAL_MAX) {
         U2HTS_LOG_ERROR("Config values out of range");
@@ -406,17 +413,19 @@ inline U2HTS_ERROR_CODES u2hts_init(u2hts_config* cfg) {
       }
     } else {
       U2HTS_LOG_ERROR(
-          "Controller does not support auto configuration, but x/y coords or "
+          "Controller does not support read configuration, but x/y coords or "
           "max_tps are not configured");
       return UE_NCONF;
     }
   }
 
   U2HTS_LOG_INFO(
-      "U2HTS config: x_max = %d, y_max = %d, max_tps = %d, x_y_swap = %d, "
+      "U2HTS config: x_max = %d, y_max = %d, max_tps = %d, x_offset = %d, "
+      "y_offset = %d, x_y_swap = %d, "
       "x_invert = %d, y_invert = %d, polling_mode = %d",
       config->coord_config.x_max, config->coord_config.y_max,
-      config->coord_config.max_tps, config->coord_config.x_y_swap,
+      config->coord_config.max_tps, config->coord_config.x_offset,
+      config->coord_config.y_offset, config->coord_config.x_y_swap,
       config->coord_config.x_invert, config->coord_config.y_invert,
       config->polling_mode);
   u2hts_usb_init();
