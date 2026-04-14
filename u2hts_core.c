@@ -140,7 +140,7 @@ void u2hts_set_tp_count(uint8_t tp_count) {
 void u2hts_set_tp(uint8_t tp_index, bool contact, uint8_t id, uint16_t x,
                   uint16_t y, uint8_t width, uint8_t height, uint8_t pressure) {
   U2HTS_LOG_DEBUG(
-      "index = %d, contact = %d, id = %d, x = %d, y = %d, width = %d, height = "
+      "raw coordinates: index = %d, contact = %d, id = %d, x = %d, y = %d, width = %d, height = "
       "%d, "
       "pressure = %d",
       tp_index, contact, id, x, y, width, height, pressure);
@@ -439,7 +439,7 @@ inline static void u2hts_handle_touch() {
   U2HTS_LOG_DEBUG("Enter %s", __func__);
   U2HTS_LOG_DEBUG("u2hts_status_mask = %x", u2hts_status_mask);
   U2HTS_SET_IRQ_STATUS_FLAG(config->polling_mode);
-  memset(u2hts_report.tp, 0x00, sizeof(u2hts_report.tp));
+  memset(&u2hts_report, 0x00, sizeof(u2hts_hid_report));
   for (uint8_t i = 0; i < U2HTS_MAX_TPS; i++) u2hts_report.tp[i].id = 0x7F;
   if (!touch_controller->operations->fetch() &&
       u2hts_previous_report.tp_count == 0 /* release tp */) {
@@ -451,6 +451,7 @@ inline static void u2hts_handle_touch() {
 
   U2HTS_LOG_DEBUG("tp_count = %d", u2hts_report.tp_count);
   u2hts_report.scan_time = u2hts_get_timestamp();
+  u2hts_report.report_id = U2HTS_HID_REPORT_TP_ID;
 
   if (!touch_controller->report_mode /* continous */ &&
       u2hts_previous_report.tp_count != u2hts_report.tp_count) {
