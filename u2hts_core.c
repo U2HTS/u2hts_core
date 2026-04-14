@@ -11,14 +11,15 @@
 #endif
 
 // .u2hts_touch_controllers section border
-extern u2hts_touch_controller* __u2hts_touch_controllers_begin;
-extern u2hts_touch_controller* __u2hts_touch_controllers_end;
+extern u2hts_touch_controller *__u2hts_touch_controllers_begin,
+    *__u2hts_touch_controllers_end;
 
 static u2hts_touch_controller* touch_controller = NULL;
 static u2hts_config* config = NULL;
 static uint32_t u2hts_tps_release_timeout = 0;
-static u2hts_hid_report u2hts_report = {0};
-static u2hts_hid_report u2hts_previous_report = {0};
+__aligned(4) static u2hts_hid_report
+    u2hts_report = {.report_id = U2HTS_HID_REPORT_TP_ID},
+    u2hts_previous_report = {.report_id = U2HTS_HID_REPORT_TP_ID};
 static uint16_t u2hts_tp_ids_mask = 0;
 // union u2hts_status_mask {
 //   struct {
@@ -438,7 +439,7 @@ inline static void u2hts_handle_touch() {
   U2HTS_LOG_DEBUG("Enter %s", __func__);
   U2HTS_LOG_DEBUG("u2hts_status_mask = %x", u2hts_status_mask);
   U2HTS_SET_IRQ_STATUS_FLAG(config->polling_mode);
-  memset(&u2hts_report, 0x00, sizeof(u2hts_report));
+  memset(u2hts_report.tp, 0x00, sizeof(u2hts_report.tp));
   for (uint8_t i = 0; i < U2HTS_MAX_TPS; i++) u2hts_report.tp[i].id = 0x7F;
   if (!touch_controller->operations->fetch() &&
       u2hts_previous_report.tp_count == 0 /* release tp */) {
@@ -500,7 +501,7 @@ inline static void u2hts_handle_touch() {
   U2HTS_LOG_DEBUG("report.scan_time = %d, report.tp_count = %d",
                   u2hts_report.scan_time, u2hts_report.tp_count);
   u2hts_delay_ms(config->report_delay);
-  u2hts_usb_report(U2HTS_HID_REPORT_TP_ID, &u2hts_report);
+  u2hts_usb_report(&u2hts_report);
   if (!touch_controller->report_mode) {
     u2hts_previous_report = u2hts_report;
     U2HTS_SET_TPS_REMAIN_FLAG((u2hts_previous_report.tp_count > 0));

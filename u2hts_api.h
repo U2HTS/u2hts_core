@@ -12,7 +12,7 @@ void u2hts_i2c_init(uint32_t speed_hz);
 void u2hts_i2c_set_speed(uint32_t speed_hz);
 bool u2hts_i2c_write(uint8_t slave_addr, void* buf, size_t len, bool stop);
 bool u2hts_i2c_read(uint8_t slave_addr, void* buf, size_t len);
-void u2hts_spi_init(u2hts_spi_config *config);
+void u2hts_spi_init(u2hts_spi_config* config);
 bool u2hts_spi_transfer(void* buf, size_t len);
 
 // true = out false = in ; true for pull up, false for pull down
@@ -25,7 +25,8 @@ bool u2hts_i2c_detect_slave(uint8_t addr);
 void u2hts_tprst_set(bool value);
 void u2hts_delay_ms(uint32_t ms);
 void u2hts_delay_us(uint32_t us);
-void u2hts_usb_report(uint8_t report_id, const u2hts_hid_report* report);
+// report_id = report->report_id
+void u2hts_usb_report(const u2hts_hid_report* report);
 void u2hts_usb_init();
 uint16_t u2hts_get_timestamp();
 void u2hts_led_set(bool on);

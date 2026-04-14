@@ -115,7 +115,7 @@
 #define U2HTS_LOG_DEBUG(...) U2HTS_UNUSED(0)
 #endif
 
-#define U2HTS_MAP_VALUE(value, src, dest) (((value) * (dest)) / (src))
+#define U2HTS_MAP_VALUE(value, min, max) (((value) * (max)) / (min))
 
 #define U2HTS_SET_BIT(val, bit, set) \
   ((set) ? ((val) |= (1U << (bit))) : ((val) &= ~(1U << (bit))))
@@ -138,7 +138,7 @@ void u2hts_set_tp_count(uint8_t tp_count);
       return false;                       \
   } while (0)
 
-#define U2HTS_DETECT_TOUCH_CONTROLLER(controller)                        \
+#define U2HTS_DETECT_TOUCH_CONTROLLER(controller)                      \
   do {                                                                 \
     if (!u2hts_i2c_detect_slave(controller.i2c_config.primary_addr)) { \
       if (controller.i2c_config.alt_addrs) {                           \
@@ -213,6 +213,7 @@ typedef struct __packed {
 } u2hts_tp;
 
 typedef struct __packed {
+  uint8_t report_id;
   u2hts_tp tp[U2HTS_MAX_TPS];
   uint16_t scan_time;
   uint8_t tp_count;
