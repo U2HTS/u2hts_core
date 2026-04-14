@@ -195,12 +195,6 @@ typedef struct __packed {
   uint16_t x : 12;
   uint16_t y : 12;
 } u2hts_tp;
-
-typedef struct __packed {
-  u2hts_tp tp[U2HTS_MAX_TPS];
-  uint16_t scan_time;
-  uint8_t tp_count;
-} u2hts_hid_report;
 #else
 typedef struct __packed {
   bool contact : 1;
@@ -211,6 +205,7 @@ typedef struct __packed {
   uint8_t height;
   uint8_t pressure;
 } u2hts_tp;
+#endif
 
 typedef struct __packed {
   uint8_t report_id;
@@ -218,7 +213,6 @@ typedef struct __packed {
   uint16_t scan_time;
   uint8_t tp_count;
 } u2hts_hid_report;
-#endif
 
 typedef struct {
   uint16_t x_max;
