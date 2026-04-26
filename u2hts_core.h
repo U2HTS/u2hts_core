@@ -11,7 +11,6 @@
 #include <stdbool.h>
 #include <stdint.h>  // uint
 #include <stdio.h>   // printf
-#include <stdlib.h>  // atoi etc
 #include <string.h>  // memcpy
 
 #define U2HTS_LOG_LEVEL_ERROR 0
@@ -70,6 +69,25 @@
 #ifndef __unused
 #define __unused __attribute__((__unused__))
 #endif
+
+#ifndef U2HTS_MANU_STR
+#define U2HTS_MANU_STR "U2HTS"
+#endif
+
+#ifndef U2HTS_PROD_STR
+#if U2HTS_LOG_LEVEL == U2HTS_LOG_LEVEL_DEBUG
+#define U2HTS_PROD_STR "USB to HID Touchscreen (Debug)"
+#else
+#define U2HTS_PROD_STR "USB to HID Touchscreen"
+#endif
+#endif
+
+#ifndef U2HTS_USB_PID
+// UH in ascii
+#define U2HTS_USB_PID 0x8572
+#endif
+
+// USB VID depends on MCU implementation.
 
 #if U2HTS_LOG_LEVEL >= U2HTS_LOG_LEVEL_ERROR
 #define U2HTS_LOG_ERROR(...) \
@@ -188,24 +206,20 @@ typedef enum {
   UTC_REPORT_MODE_EVENT
 } U2HTS_TOUCH_CONTROLLER_REPORT_MODE;
 
-#ifdef U2HTS_ENABLE_COMPACT_REPORT
 typedef struct __packed {
   bool contact : 1;
   uint8_t id : 7;
+#ifdef U2HTS_ENABLE_COMPACT_REPORT
   uint16_t x : 12;
   uint16_t y : 12;
-} u2hts_tp;
 #else
-typedef struct __packed {
-  bool contact : 1;
-  uint8_t id : 7;
   uint16_t x;
   uint16_t y;
   uint8_t width;
   uint8_t height;
   uint8_t pressure;
-} u2hts_tp;
 #endif
+} u2hts_tp;
 
 typedef struct __packed {
   uint8_t report_id;
@@ -289,12 +303,23 @@ void u2hts_set_tp(uint8_t tp_index, bool contact, uint8_t id, uint16_t x,
                   uint16_t y, uint8_t width, uint8_t height, uint8_t pressure);
 size_t u2hts_get_custom_config(const char* config_name, uint8_t* buf,
                                size_t bufsiz);
-inline static int32_t u2hts_get_custom_config_i32(const char* config_name) {
+inline static uint32_t u2hts_get_custom_config_u32(const char* config_name,
+                                                   uint32_t default_value) {
   uint8_t buf[U2HTS_CUSTOM_CONFIG_STR_MAX_KEY_LENGTH] = {0};
-  if (u2hts_get_custom_config(config_name, buf, sizeof(buf)))
-    return atoi((const char*)buf);
-  else
-    return -1;
+  if (!u2hts_get_custom_config(config_name, buf, sizeof(buf)))
+    return default_value;
+
+  uint32_t result = 0;
+  const uint8_t* p = buf;
+  if (*p < '0' || *p > '9') return default_value;
+
+  while (*p >= '0' && *p <= '9') {
+    uint32_t digit = *p - '0';
+    if (result > (UINT32_MAX - digit) / 10) return default_value;
+    result = result * 10 + digit;
+    p++;
+  }
+  return result;
 }
 
 #ifdef U2HTS_ENABLE_LED

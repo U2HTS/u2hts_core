@@ -17,9 +17,7 @@ extern u2hts_touch_controller *__u2hts_touch_controllers_begin,
 static u2hts_touch_controller* touch_controller = NULL;
 static u2hts_config* config = NULL;
 static uint32_t u2hts_tps_release_timeout = 0;
-__aligned(4) static u2hts_hid_report
-    u2hts_report = {.report_id = U2HTS_HID_REPORT_TP_ID},
-    u2hts_previous_report = {.report_id = U2HTS_HID_REPORT_TP_ID};
+__aligned(4) static u2hts_hid_report u2hts_report, u2hts_previous_report;
 static uint16_t u2hts_tp_ids_mask = 0;
 // union u2hts_status_mask {
 //   struct {
@@ -140,7 +138,8 @@ void u2hts_set_tp_count(uint8_t tp_count) {
 void u2hts_set_tp(uint8_t tp_index, bool contact, uint8_t id, uint16_t x,
                   uint16_t y, uint8_t width, uint8_t height, uint8_t pressure) {
   U2HTS_LOG_DEBUG(
-      "raw coordinates: index = %d, contact = %d, id = %d, x = %d, y = %d, width = %d, height = "
+      "raw coordinates: index = %d, contact = %d, id = %d, x = %d, y = %d, "
+      "width = %d, height = "
       "%d, "
       "pressure = %d",
       tp_index, contact, id, x, y, width, height, pressure);
@@ -265,20 +264,31 @@ inline static u2hts_touch_controller* u2hts_get_touch_controller_by_i2c_addr(
 size_t u2hts_get_custom_config(const char* config_name, uint8_t* buf,
                                size_t bufsiz) {
   if (!config->custom_controller_config) return 0;
-  char config_str_buf[U2HTS_CUSTOM_CONFIG_STR_MAX_TOTAL_LENGTH],
-      cfgnamebuf[U2HTS_CUSTOM_CONFIG_STR_MAX_KEY_LENGTH] = {0};
-  strncpy(config_str_buf, config->custom_controller_config,
-          sizeof(config_str_buf));
-  snprintf(cfgnamebuf, sizeof(cfgnamebuf), "%s=", config_name);
 
-  char* token = strtok(config_str_buf, " ");
-  while (token) {
-    size_t offset = strspn(cfgnamebuf, token);
-    if (offset) {
-      strncpy((char*)buf, token + offset, bufsiz);
-      return strlen((char*)buf);
+  const char* src = config->custom_controller_config;
+
+  while (*src) {
+    while (*src == ' ') src++;
+    if (!*src) break;
+
+    const char *token = src, *t = token;
+    while (*src && *src != ' ') src++;
+    const char *token_end = src, *k = config_name;
+
+    while (*k && t < token_end && *k == *t) {
+      k++;
+      t++;
     }
-    token = strtok(NULL, " ");
+
+    if (!*k && t < token_end && *t == '=') {
+      t++;
+
+      size_t len = (size_t)(token_end - t);
+      if (len >= bufsiz) len = bufsiz - 1;
+      memcpy(buf, t, len);
+      buf[len] = '\0';
+      return len;
+    }
   }
   return 0;
 }
@@ -331,6 +341,8 @@ inline U2HTS_ERROR_CODES u2hts_init(u2hts_config* cfg) {
   );
   u2hts_list_touch_controller();
 
+  U2HTS_LOG_DEBUG("This is a DEBUG build and expect low report rate!");
+
 #ifdef U2HTS_ENABLE_PERSISTENT_CONFIG
   if (u2hts_config_exists())
     u2hts_load_config(config);
@@ -338,18 +350,31 @@ inline U2HTS_ERROR_CODES u2hts_init(u2hts_config* cfg) {
     u2hts_save_config(config);
 #endif
 
-  if (config->bus_type == UB_I2C)
-    u2hts_i2c_init(100 * 1000);  // 100 KHz for controller detection
-
   if (config->bus_type != UB_I2C && !strcmp(config->controller, "auto")) {
     U2HTS_LOG_ERROR("Bus type %d does not support controller detection",
                     config->bus_type);
     return UE_NCONF;
   }
 
-  if (config->bus_type == UB_I2C && !strcmp(config->controller, "auto"))
-    u2hts_error = u2hts_detect_touch_controller(&touch_controller);
-  else {
+  if (config->bus_type == UB_I2C)
+    u2hts_i2c_init(100 * 1000);  // 100 KHz for controller detection
+
+  if (config->bus_type == UB_I2C && !strcmp(config->controller, "auto")) {
+    if (config->override_i2c_config) {
+      U2HTS_LOG_INFO("Specified controller address: 0x%x",
+                     config->i2c_config.primary_addr);
+      touch_controller = u2hts_get_touch_controller_by_i2c_addr(
+          config->i2c_config.primary_addr);
+      if (!touch_controller) {
+        U2HTS_LOG_ERROR("Specified address 0x%x has no known controller match",
+                        config->i2c_config.primary_addr);
+        return UE_NCOMPAT;
+      }
+      U2HTS_LOG_INFO("Found controller %s @ addr 0x%x", touch_controller->name,
+                     config->i2c_config.primary_addr);
+    } else
+      u2hts_error = u2hts_detect_touch_controller(&touch_controller);
+  } else {
     U2HTS_LOG_INFO("Controller: %s", cfg->controller);
     touch_controller = u2hts_get_touch_controller_by_name(cfg->controller);
     if (!touch_controller) u2hts_error = UE_NCOMPAT;
@@ -358,6 +383,18 @@ inline U2HTS_ERROR_CODES u2hts_init(u2hts_config* cfg) {
   if (u2hts_error) {
     U2HTS_LOG_ERROR("Failed to get touch controller");
     return u2hts_error;
+  }
+
+  if (config->bus_type == UB_SPI && !touch_controller->spi_config.speed_hz) {
+    U2HTS_LOG_ERROR("Controller %s does not support SPI",
+                    touch_controller->name);
+    return UE_NCOMPAT;
+  }
+
+  if (config->bus_type == UB_I2C && !touch_controller->i2c_config.speed_hz) {
+    U2HTS_LOG_ERROR("Controller %s does not support I2C",
+                    touch_controller->name);
+    return UE_NCOMPAT;
   }
 
   if (config->override_i2c_config)
@@ -431,7 +468,7 @@ inline U2HTS_ERROR_CODES u2hts_init(u2hts_config* cfg) {
       config->polling_mode);
   u2hts_usb_init();
   if (!config->polling_mode) u2hts_ts_irq_init(touch_controller->irq_type);
-  U2HTS_LOG_DEBUG("Exit %s", __func__);
+  U2HTS_LOG_DEBUG("Exit %s, u2hts_error = %d", __func__, u2hts_error);
   return u2hts_error;
 }
 
@@ -440,9 +477,8 @@ inline static void u2hts_handle_touch() {
   U2HTS_LOG_DEBUG("u2hts_status_mask = %x", u2hts_status_mask);
   U2HTS_SET_IRQ_STATUS_FLAG(config->polling_mode);
   memset(&u2hts_report, 0x00, sizeof(u2hts_hid_report));
-  for (uint8_t i = 0; i < U2HTS_MAX_TPS; i++) u2hts_report.tp[i].id = 0x7F;
-  if (!touch_controller->operations->fetch() &&
-      u2hts_previous_report.tp_count == 0 /* release tp */) {
+  // for (uint8_t i = 0; i < U2HTS_MAX_TPS; i++) u2hts_report.tp[i].id = 0x7F;
+  if (!touch_controller->operations->fetch() && !U2HTS_GET_TPS_REMAIN_FLAG()) {
     U2HTS_LOG_DEBUG(
         "Failed to fetch touch data, tp_count = %d, previous_tp_count = %d",
         u2hts_report.tp_count, u2hts_previous_report.tp_count);
@@ -453,38 +489,30 @@ inline static void u2hts_handle_touch() {
   u2hts_report.scan_time = u2hts_get_timestamp();
   u2hts_report.report_id = U2HTS_HID_REPORT_TP_ID;
 
-  if (!touch_controller->report_mode /* continous */ &&
-      u2hts_previous_report.tp_count != u2hts_report.tp_count) {
+  if (u2hts_previous_report.tp_count != u2hts_report.tp_count &&
+      !touch_controller->report_mode /* continous */) {
     uint16_t new_ids_mask = 0;
-    for (uint8_t i = 0; i < u2hts_report.tp_count; i++) {
-      uint8_t id = u2hts_report.tp[i].id;
-      U2HTS_SET_BIT(new_ids_mask, id, (u2hts_report.tp[i].id < U2HTS_MAX_TPS));
-    }
+    for (uint8_t i = 0; i < u2hts_report.tp_count; i++)
+      U2HTS_SET_BIT(new_ids_mask, u2hts_report.tp[i].id, 1);
 
     uint16_t released_ids_mask = u2hts_tp_ids_mask & ~new_ids_mask;
-    for (uint8_t i = 0; i < U2HTS_MAX_TPS; i++) {
-      if (U2HTS_CHECK_BIT(released_ids_mask, i)) {
-        for (uint8_t j = 0; j < U2HTS_MAX_TPS; j++) {
-          if (u2hts_previous_report.tp[j].id == i) {
-            u2hts_previous_report.tp[j].contact = false;
-            u2hts_report.tp[u2hts_report.tp_count] =
-                u2hts_previous_report.tp[j];
-            u2hts_report.tp_count++;
-            break;
-          }
-        }
+
+    for (uint8_t i = 0; i < u2hts_previous_report.tp_count; i++) {
+      if (U2HTS_CHECK_BIT(released_ids_mask, u2hts_previous_report.tp[i].id)) {
+        u2hts_previous_report.tp[i].contact = false;
+        u2hts_report.tp[u2hts_report.tp_count++] = u2hts_previous_report.tp[i];
       }
     }
     u2hts_tp_ids_mask = new_ids_mask;
   }
 
   for (uint8_t i = 0; i < u2hts_report.tp_count; i++) {
-#ifdef U2HTS_USE_COMPAT_REPORT
+#ifdef U2HTS_ENABLE_COMPACT_REPORT
     U2HTS_LOG_DEBUG(
         "report.tp[%d].contact = %d, report.tp[i].x = %d, "
-        "report.tp[i].y = %d, report.tp[i].id = %d" i,
-        u2hts_report.tp[i].contact, u2hts_report.tp[i].x, u2hts_report.tp[i].y,
-        u2hts_report.tp[i].id);
+        "report.tp[i].y = %d, report.tp[i].id = %d",
+        i, u2hts_report.tp[i].contact, u2hts_report.tp[i].x,
+        u2hts_report.tp[i].y, u2hts_report.tp[i].id);
 #else
     U2HTS_LOG_DEBUG(
         "report.tp[%d].contact = %d, report.tp[i].x = %d, "
@@ -519,16 +547,14 @@ inline void u2hts_task() {
       U2HTS_SET_CONFIG_MODE_FLAG(u2hts_get_key_timeout(1000));
     else {
 #endif
-      if (!touch_controller->report_mode) {
-        if (U2HTS_GET_TPS_REMAIN_FLAG()) {
-          if (u2hts_tps_release_timeout > U2HTS_TPS_RELEASE_TIMEOUT &&
-              u2hts_get_usb_status()) {
-            U2HTS_LOG_DEBUG("releasing remain tps");
-            u2hts_handle_touch();
-          } else {
-            u2hts_delay_us(1);
-            u2hts_tps_release_timeout++;
-          }
+      if (!touch_controller->report_mode && U2HTS_GET_TPS_REMAIN_FLAG()) {
+        if (u2hts_tps_release_timeout > U2HTS_TPS_RELEASE_TIMEOUT &&
+            u2hts_get_usb_status()) {
+          U2HTS_LOG_DEBUG("releasing remain tps");
+          u2hts_handle_touch();
+        } else {
+          u2hts_delay_us(1);
+          u2hts_tps_release_timeout++;
         }
       }
 
