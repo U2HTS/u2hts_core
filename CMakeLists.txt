@@ -1,7 +1,7 @@
 find_package(Git QUIET)
 if(GIT_FOUND)
     execute_process(
-        COMMAND ${GIT_EXECUTABLE} rev-parse --short HEAD
+        COMMAND ${GIT_EXECUTABLE} describe --tags --dirty --always
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
         OUTPUT_VARIABLE U2HTS_GIT_SHA
         OUTPUT_STRIP_TRAILING_WHITESPACE
