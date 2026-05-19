@@ -24,21 +24,22 @@ bool u2hts_spi_transfer(void* buf, size_t len);
 void u2hts_usb_init();
 // report_id = report->report_id
 void u2hts_usb_report(const u2hts_hid_report* report);
+// true = okay false = busy
+bool u2hts_get_usb_status();
 
 // true = out false = in ; true for pull up, false for pull down
 void u2hts_tpint_set_mode(bool mode, bool pull);
 void u2hts_tpint_set(bool value);
 bool u2hts_tpint_get();
+void u2hts_tprst_set(bool value);
 void u2hts_ts_irq_set(bool enable);
 void u2hts_ts_irq_init(U2HTS_IRQ_TYPES irq_type);
-
-void u2hts_tprst_set(bool value);
-
+// U2HTS_ENABLE_LED
 void u2hts_led_set(bool on);
+// U2HTS_ENABLE_PERSISTANT_CONFIG
 void u2hts_write_config(uint16_t cfg);
 uint16_t u2hts_read_config();
+// U2HTS_ENABLE_KEY
 bool u2hts_usrkey_get();
-// true = okay false = busy
-bool u2hts_get_usb_status();
 
 #endif
