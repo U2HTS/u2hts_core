@@ -1,12 +1,16 @@
 #ifndef _U2HTS_REPORT_DESCRIPTOR_H_
 #define _U2HTS_REPORT_DESCRIPTOR_H_
 
+#ifndef U2HTS_MAX_TPS
+#define U2HTS_MAX_TPS 10
+#endif
+
 #define U2HTS_HID_REPORT_TP_ID 1
 #define U2HTS_HID_REPORT_TP_MAX_COUNT_ID 2
 #define U2HTS_HID_REPORT_TP_MS_THQA_CERT_ID 3
 
 #ifdef U2HTS_ENABLE_COMPACT_REPORT
-#define U2HTS_REPORT_HID_TP                                                                                            \
+#define U2HTS_HID_REPORT_TP                                                                                            \
   0x09, 0x22,           /* (LOCAL)  USAGE              Touch Point */                                                  \
       0xA1, 0x02,       /* (MAIN)   COLLECTION         Logical */                                                      \
       0x09, 0x42,       /* (LOCAL)  USAGE              Tip Switch */                                                   \
@@ -61,7 +65,7 @@
       0xC0              /* (MAIN)   END_COLLECTION */
 #endif
 
-#define U2HTS_HID_REPORT_DESCIPTOR_HEADER                                                                              \
+#define U2HTS_HID_REPORT_DESCRIPTOR_START                                                                              \
   0x05, 0x0D,                       /* (GLOBAL) USAGE_PAGE         Digitizers */                                       \
       0x09, 0x04,                   /* (LOCAL)  USAGE              Touch Screen */                                     \
       0xA1, 0x01,                   /* (MAIN)   COLLECTION         Application */                                      \
@@ -98,8 +102,13 @@
       0x96, 0x00, 0x01, /* (GLOBAL) REPORT_COUNT       256 */                                                          \
       0xB1, 0x02        /* (MAIN)   FEATURE            (Data, Variable, Absolute) */
 
-#ifndef U2HTS_HID_REPORT_TP_MS_THQA_CERT
-#define U2HTS_HID_REPORT_TP_MS_THQA_CERT                                                                               \
+#define U2HTS_HID_REPORT_DESCRIPTOR_END 0xC0 /* (MAIN)   END_COLLECTION */
+
+// https://learn.microsoft.com/en-us/windows-hardware/design/component-guidelines/touchscreen-required-hid-top-level-collections
+// "Device Certification Status Feature Report" section
+
+#ifndef U2HTS_MS_THQA_CERT
+#define U2HTS_MS_THQA_CERT                                                                                     \
   U2HTS_HID_REPORT_TP_MS_THQA_CERT_ID, 0xfc, 0x28, 0xfe, 0x84, 0x40, 0xcb, 0x9a, 0x87, 0x0d, 0xbe, 0x57, 0x3c, 0xb6,   \
       0x70, 0x09, 0x88, 0x07, 0x97, 0x2d, 0x2b, 0xe3, 0x38, 0x34, 0xb6, 0x6c, 0xed, 0xb0, 0xf7, 0xe5, 0x9c, 0xf6,      \
       0xc2, 0x2e, 0x84, 0x1b, 0xe8, 0xb4, 0x51, 0x78, 0x43, 0x1f, 0x28, 0x4b, 0x7c, 0x2d, 0x53, 0xaf, 0xfc, 0x47,      \
@@ -118,8 +127,10 @@
 #endif
 
 // clang-format off
-#define U2HTS_HID_REPORT_DESCRIPTOR                                                                                    \
-  U2HTS_HID_REPORT_DESCIPTOR_HEADER,                                                                                   \
+#ifndef U2HTS_HID_REPORT_DESCRIPTOR
+// 10 TPs
+#define U2HTS_HID_REPORT_DESCRIPTOR                                                                            \
+  U2HTS_HID_REPORT_DESCRIPTOR_START,                                                                                   \
       U2HTS_HID_REPORT_TP,                                /* Touch Point 1  */                                         \
       U2HTS_HID_REPORT_TP,                                /* Touch Point 2  */                                         \
       U2HTS_HID_REPORT_TP,                                /* Touch Point 3  */                                         \
@@ -133,6 +144,8 @@
       U2HTS_HID_REPORT_TP_INFO,                                                                                        \
       U2HTS_HID_REPORT_TP_MAX_COUNT_DESC(U2HTS_HID_REPORT_TP_MAX_COUNT_ID),                                            \
       U2HTS_HID_REPORT_TP_MS_THQA_CERT_DESC(U2HTS_HID_REPORT_TP_MS_THQA_CERT_ID),                                      \
-      0xC0 /* (MAIN)   END_COLLECTION */
+      U2HTS_HID_REPORT_DESCRIPTOR_END
+
 // clang-format on
+#endif
 #endif
