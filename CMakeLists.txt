@@ -16,9 +16,15 @@ endif()
 
 add_library(u2hts_core_settings INTERFACE)
 
-# generated descriptor stored in U2HTS_HID_REPORT_DESCRIPTOR macro
-function(u2hts_generate_hid_report_descriptor max_tps)
-foreach(i RANGE 1 ${max_tps})
+set(U2HTS_MAX_TPS 10 CACHE STRING "U2HTS max touch points")
+
+target_compile_definitions(u2hts_core_settings INTERFACE 
+    U2HTS_MAX_TPS=${U2HTS_MAX_TPS}
+)
+
+# override U2HTS_HID_REPORT_DESCRIPTOR
+function(u2hts_generate_hid_report_descriptor)
+foreach(i RANGE 1 ${U2HTS_MAX_TPS})
     list(APPEND U2HTS_TPS "U2HTS_HID_REPORT_TP")
 endforeach()
 
@@ -34,7 +40,6 @@ set(U2HTS_HID_REPORT_DESCRIPTOR_DEF
 )
 
 target_compile_definitions(u2hts_core_settings INTERFACE
-    U2HTS_MAX_TPS=${max_tps}
     ${U2HTS_HID_REPORT_DESCRIPTOR_DEF}
 )
 
