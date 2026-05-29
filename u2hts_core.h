@@ -188,6 +188,7 @@ typedef enum {
 typedef enum {
   UB_I2C,
   UB_SPI,
+  UB_NONE,
 } U2HTS_BUS_TYPES;
 
 /*

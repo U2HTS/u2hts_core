@@ -414,6 +414,8 @@ inline U2HTS_ERROR_CODES u2hts_init(u2hts_config* cfg) {
     case UB_SPI:
       u2hts_spi_init(&touch_controller->spi_config);
       break;
+    case UB_NONE:
+      break;
   }
 
   // setup controller
