@@ -5,7 +5,7 @@
   All rights reserved.
 */
 #include "u2hts_core.h"
-#include "u2hts_report_descriptor.h"
+#include "u2hts_hid_report_descriptor.h"
 
 #ifndef U2HTS_GIT_SHA
 #define U2HTS_GIT_SHA "UNKNOWN"
