@@ -18,7 +18,7 @@ extern u2hts_touch_controller *__u2hts_touch_controllers_begin,
 
 static u2hts_touch_controller* touch_controller = NULL;
 static u2hts_config* config = NULL;
-static uint32_t u2hts_tps_release_timeout = 0;
+static uint16_t u2hts_tps_last_ts = 0;
 __aligned(4) static u2hts_hid_report u2hts_report, u2hts_previous_report;
 static uint16_t u2hts_tp_ids_mask = 0;
 // union u2hts_status_mask {
@@ -37,10 +37,24 @@ static uint8_t u2hts_status_mask = 0x00;
 // x_y_swap, y_invert 270
 static __unused const uint16_t u2hts_configs[] = {0x0, 0x320, 0x620, 0x520};
 
+#ifdef U2HTS_ENABLE_FREERTOS
+
+static TaskHandle_t u2hts_touch_task_handle = NULL;
+static StackType_t
+    u2hts_touch_task_stack[U2HTS_TOUCH_TASK_STACK_SIZE] = {0},
+    u2hts_tps_release_task_stack[U2HTS_TPS_RELEASE_TASK_STACK_SIZE] = {0},
+    u2hts_key_task_stack[U2HTS_KEY_TASK_STACK_SIZE] = {0};
+
+static StaticTask_t u2hts_touch_tcb = {0}, u2hts_tps_release_tcb = {0},
+                    u2hts_key_tcb = {0};
+__weak_symbol void u2hts_delay_ms(uint32_t ms) {
+  vTaskDelay(pdMS_TO_TICKS(ms));
+}
+#endif
+
 #define U2HTS_SET_IRQ_STATUS_FLAG(x) U2HTS_SET_BIT(u2hts_status_mask, 0, x)
 #define U2HTS_SET_CONFIG_MODE_FLAG(x) U2HTS_SET_BIT(u2hts_status_mask, 1, x)
 #define U2HTS_SET_TPS_REMAIN_FLAG(x) U2HTS_SET_BIT(u2hts_status_mask, 2, x)
-
 #define U2HTS_GET_IRQ_STATUS_FLAG() U2HTS_CHECK_BIT(u2hts_status_mask, 0)
 #define U2HTS_GET_CONFIG_MODE_FLAG() U2HTS_CHECK_BIT(u2hts_status_mask, 1)
 #define U2HTS_GET_TPS_REMAIN_FLAG() U2HTS_CHECK_BIT(u2hts_status_mask, 2)
@@ -114,6 +128,11 @@ inline void u2hts_ts_irq_status_set(bool status) {
   u2hts_ts_irq_set(false);
   U2HTS_LOG_DEBUG("ts irq triggered");
   U2HTS_SET_IRQ_STATUS_FLAG(status);
+#ifdef U2HTS_ENABLE_FREERTOS
+  BaseType_t hptw = pdFALSE;
+  vTaskNotifyGiveFromISR(u2hts_touch_task_handle, &hptw);
+  portYIELD_FROM_ISR(hptw);
+#endif
 }
 
 inline void u2hts_apply_config(u2hts_config* cfg, uint8_t config_index) {
@@ -221,6 +240,9 @@ inline static void u2hts_handle_config() {
   U2HTS_LOG_INFO("Saving config");
   u2hts_save_config(config);
   U2HTS_SET_CONFIG_MODE_FLAG(0);
+#ifdef U2HTS_ENABLE_FREERTOS
+  vTaskResume(u2hts_touch_task_handle);
+#endif
 }
 
 inline static void u2hts_list_touch_controller() {
@@ -314,6 +336,125 @@ inline static U2HTS_ERROR_CODES u2hts_detect_touch_controller(
 
 inline uint8_t u2hts_get_max_tps() { return config->coord_config.max_tps; }
 
+inline static void u2hts_append_released_tps() {
+  if (u2hts_previous_report.tp_count == u2hts_report.tp_count) return;
+
+  uint16_t new_ids_mask = 0;
+  for (uint8_t i = 0; i < u2hts_report.tp_count; i++)
+    U2HTS_SET_BIT(new_ids_mask, u2hts_report.tp[i].id, 1);
+
+  uint16_t released_ids_mask = u2hts_tp_ids_mask & ~new_ids_mask;
+
+  for (uint8_t i = 0; i < u2hts_previous_report.tp_count; i++) {
+    if (U2HTS_CHECK_BIT(released_ids_mask, u2hts_previous_report.tp[i].id)) {
+      u2hts_previous_report.tp[i].contact = false;
+      u2hts_report.tp[u2hts_report.tp_count++] = u2hts_previous_report.tp[i];
+    }
+  }
+  u2hts_tp_ids_mask = new_ids_mask;
+}
+
+inline static void u2hts_handle_touch() {
+  U2HTS_LOG_DEBUG("Enter %s", __func__);
+  U2HTS_LOG_DEBUG("u2hts_status_mask = %x", u2hts_status_mask);
+  U2HTS_SET_IRQ_STATUS_FLAG(config->polling_mode);
+  memset(&u2hts_report, 0x00, sizeof(u2hts_hid_report));
+  // for (uint8_t i = 0; i < U2HTS_MAX_TPS; i++) u2hts_report.tp[i].id = 0x7F;
+  if (!touch_controller->operations->fetch()) {
+    U2HTS_LOG_DEBUG(
+        "Failed to fetch touch data, tp_count = %d, previous_tp_count = %d",
+        u2hts_report.tp_count, u2hts_previous_report.tp_count);
+    return;
+  }
+
+  U2HTS_LOG_DEBUG("tp_count = %d", u2hts_report.tp_count);
+  u2hts_report.scan_time = u2hts_get_timestamp();
+  u2hts_report.report_id = U2HTS_HID_REPORT_TP_ID;
+
+  if (!touch_controller->report_mode) u2hts_append_released_tps();
+
+  for (uint8_t i = 0; i < u2hts_report.tp_count; i++) {
+#ifdef U2HTS_ENABLE_COMPACT_REPORT
+    U2HTS_LOG_DEBUG(
+        "report.tp[%d].contact = %d, report.tp[i].x = %d, "
+        "report.tp[i].y = %d, report.tp[i].id = %d",
+        i, u2hts_report.tp[i].contact, u2hts_report.tp[i].x,
+        u2hts_report.tp[i].y, u2hts_report.tp[i].id);
+#else
+    U2HTS_LOG_DEBUG(
+        "report.tp[%d].contact = %d, report.tp[i].x = %d, "
+        "report.tp[i].y = %d, report.tp[i].height = %d, "
+        "report.tp[i].width = %d, report.tp[i].pressure = %d, "
+        "report.tp[i].id "
+        "= %d",
+        i, u2hts_report.tp[i].contact, u2hts_report.tp[i].x,
+        u2hts_report.tp[i].y, u2hts_report.tp[i].height,
+        u2hts_report.tp[i].width, u2hts_report.tp[i].pressure,
+        u2hts_report.tp[i].id);
+#endif
+  }
+
+  U2HTS_LOG_DEBUG("report.scan_time = %d, report.tp_count = %d",
+                  u2hts_report.scan_time, u2hts_report.tp_count);
+  u2hts_delay_ms(config->report_delay);
+  u2hts_usb_report(&u2hts_report);
+  if (!touch_controller->report_mode) {
+    u2hts_previous_report = u2hts_report;
+    U2HTS_SET_TPS_REMAIN_FLAG((u2hts_previous_report.tp_count > 0));
+    u2hts_tps_last_ts = u2hts_get_timestamp();
+  }
+}
+
+inline static void u2hts_release_tps() {
+  for (uint8_t i = 0; i < u2hts_previous_report.tp_count; i++)
+    u2hts_previous_report.tp[i].contact = false;
+  u2hts_previous_report.scan_time = u2hts_get_timestamp();
+  u2hts_usb_report(&u2hts_previous_report);
+  u2hts_tp_ids_mask = 0;
+  U2HTS_SET_TPS_REMAIN_FLAG(0);
+  u2hts_tps_last_ts = u2hts_get_timestamp();
+}
+
+#ifdef U2HTS_ENABLE_FREERTOS
+
+static void u2hts_touch_task(void* pvParameters) {
+  while (1) {
+    if (config->polling_mode)
+      u2hts_handle_touch();
+    else {
+      ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(10));
+      if (u2hts_get_usb_status() && U2HTS_GET_IRQ_STATUS_FLAG())
+        u2hts_handle_touch();
+      u2hts_ts_irq_set(!config->polling_mode && u2hts_get_usb_status());
+    }
+    u2hts_led_set(!u2hts_get_usb_status());
+  }
+}
+
+static void u2hts_tps_release_task(void* pvParameters) {
+  while (1) {
+    u2hts_delay_ms(10);
+    if (u2hts_get_usb_status() && U2HTS_GET_TPS_REMAIN_FLAG() &&
+        (uint16_t)(u2hts_get_timestamp() - u2hts_tps_last_ts) >
+            U2HTS_TPS_RELEASE_TIMEOUT) {
+      U2HTS_LOG_DEBUG("releasing remain tps");
+      u2hts_release_tps();
+    }
+  }
+}
+
+static void u2hts_key_task(void* pvParameters) {
+  while (1) {
+    u2hts_delay_ms(10);
+    if (u2hts_get_key_timeout(1000)) {
+      vTaskSuspend(u2hts_touch_task_handle);
+      u2hts_handle_config();
+    }
+  }
+}
+
+#endif
+
 inline U2HTS_ERROR_CODES u2hts_init(u2hts_config* cfg) {
   U2HTS_LOG_DEBUG("Enter %s", __func__);
   U2HTS_ERROR_CODES u2hts_error = UE_OK;
@@ -329,6 +470,9 @@ inline U2HTS_ERROR_CODES u2hts_init(u2hts_config* cfg) {
 #endif
 #ifdef U2HTS_ENABLE_PERSISTENT_CONFIG
                  " U2HTS_ENABLE_PERSISTENT_CONFIG"
+#endif
+#ifdef U2HTS_ENABLE_FREERTOS
+                 " U2HTS_ENABLE_FREERTOS"
 #endif
   );
   u2hts_list_touch_controller();
@@ -458,74 +602,21 @@ inline U2HTS_ERROR_CODES u2hts_init(u2hts_config* cfg) {
       config->polling_mode);
   u2hts_usb_init();
   if (!config->polling_mode) u2hts_ts_irq_init(touch_controller->irq_type);
+
+#ifdef U2HTS_ENABLE_FREERTOS
+  u2hts_touch_task_handle = xTaskCreateStatic(
+      u2hts_touch_task, "u2hts_touch_task", U2HTS_TOUCH_TASK_STACK_SIZE, NULL,
+      U2HTS_TOUCH_TASK_PRIORITY, u2hts_touch_task_stack, &u2hts_touch_tcb);
+  xTaskCreateStatic(u2hts_tps_release_task, "u2hts_tps_release_task",
+                    U2HTS_TPS_RELEASE_TASK_STACK_SIZE, NULL,
+                    U2HTS_TPS_RELEASE_TASK_PRIORITY,
+                    u2hts_tps_release_task_stack, &u2hts_tps_release_tcb);
+  xTaskCreateStatic(u2hts_key_task, "u2hts_key_task", U2HTS_KEY_TASK_STACK_SIZE,
+                    NULL, U2HTS_KEY_TASK_PRIORITY, u2hts_key_task_stack,
+                    &u2hts_key_tcb);
+#endif
   U2HTS_LOG_DEBUG("Exit %s, u2hts_error = %d", __func__, u2hts_error);
   return u2hts_error;
-}
-
-inline static void u2hts_handle_touch() {
-  U2HTS_LOG_DEBUG("Enter %s", __func__);
-  U2HTS_LOG_DEBUG("u2hts_status_mask = %x", u2hts_status_mask);
-  U2HTS_SET_IRQ_STATUS_FLAG(config->polling_mode);
-  memset(&u2hts_report, 0x00, sizeof(u2hts_hid_report));
-  // for (uint8_t i = 0; i < U2HTS_MAX_TPS; i++) u2hts_report.tp[i].id = 0x7F;
-  if (!touch_controller->operations->fetch() && !U2HTS_GET_TPS_REMAIN_FLAG()) {
-    U2HTS_LOG_DEBUG(
-        "Failed to fetch touch data, tp_count = %d, previous_tp_count = %d",
-        u2hts_report.tp_count, u2hts_previous_report.tp_count);
-    return;
-  }
-
-  U2HTS_LOG_DEBUG("tp_count = %d", u2hts_report.tp_count);
-  u2hts_report.scan_time = u2hts_get_timestamp();
-  u2hts_report.report_id = U2HTS_HID_REPORT_TP_ID;
-
-  if (u2hts_previous_report.tp_count != u2hts_report.tp_count &&
-      !touch_controller->report_mode /* continous */) {
-    uint16_t new_ids_mask = 0;
-    for (uint8_t i = 0; i < u2hts_report.tp_count; i++)
-      U2HTS_SET_BIT(new_ids_mask, u2hts_report.tp[i].id, 1);
-
-    uint16_t released_ids_mask = u2hts_tp_ids_mask & ~new_ids_mask;
-
-    for (uint8_t i = 0; i < u2hts_previous_report.tp_count; i++) {
-      if (U2HTS_CHECK_BIT(released_ids_mask, u2hts_previous_report.tp[i].id)) {
-        u2hts_previous_report.tp[i].contact = false;
-        u2hts_report.tp[u2hts_report.tp_count++] = u2hts_previous_report.tp[i];
-      }
-    }
-    u2hts_tp_ids_mask = new_ids_mask;
-  }
-
-  for (uint8_t i = 0; i < u2hts_report.tp_count; i++) {
-#ifdef U2HTS_ENABLE_COMPACT_REPORT
-    U2HTS_LOG_DEBUG(
-        "report.tp[%d].contact = %d, report.tp[i].x = %d, "
-        "report.tp[i].y = %d, report.tp[i].id = %d",
-        i, u2hts_report.tp[i].contact, u2hts_report.tp[i].x,
-        u2hts_report.tp[i].y, u2hts_report.tp[i].id);
-#else
-    U2HTS_LOG_DEBUG(
-        "report.tp[%d].contact = %d, report.tp[i].x = %d, "
-        "report.tp[i].y = %d, report.tp[i].height = %d, "
-        "report.tp[i].width = %d, report.tp[i].pressure = %d, "
-        "report.tp[i].id "
-        "= %d",
-        i, u2hts_report.tp[i].contact, u2hts_report.tp[i].x,
-        u2hts_report.tp[i].y, u2hts_report.tp[i].height,
-        u2hts_report.tp[i].width, u2hts_report.tp[i].pressure,
-        u2hts_report.tp[i].id);
-#endif
-  }
-
-  U2HTS_LOG_DEBUG("report.scan_time = %d, report.tp_count = %d",
-                  u2hts_report.scan_time, u2hts_report.tp_count);
-  u2hts_delay_ms(config->report_delay);
-  u2hts_usb_report(&u2hts_report);
-  if (!touch_controller->report_mode) {
-    u2hts_previous_report = u2hts_report;
-    U2HTS_SET_TPS_REMAIN_FLAG((u2hts_previous_report.tp_count > 0));
-    u2hts_tps_release_timeout = 0;
-  }
 }
 
 inline void u2hts_task() {
@@ -536,13 +627,11 @@ inline void u2hts_task() {
       U2HTS_SET_CONFIG_MODE_FLAG(u2hts_get_key_timeout(1000));
     else {
       if (!touch_controller->report_mode && U2HTS_GET_TPS_REMAIN_FLAG()) {
-        if (u2hts_tps_release_timeout > U2HTS_TPS_RELEASE_TIMEOUT &&
+        if ((uint16_t)(u2hts_get_timestamp() - u2hts_tps_last_ts) >
+                U2HTS_TPS_RELEASE_TIMEOUT &&
             u2hts_get_usb_status()) {
           U2HTS_LOG_DEBUG("releasing remain tps");
-          u2hts_handle_touch();
-        } else {
-          u2hts_delay_us(1);
-          u2hts_tps_release_timeout++;
+          u2hts_release_tps();
         }
       }
 

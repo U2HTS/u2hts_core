@@ -10,6 +10,7 @@
 
 void u2hts_delay_ms(uint32_t ms);
 void u2hts_delay_us(uint32_t us);
+// return current timestamp in milliseconds.
 uint16_t u2hts_get_timestamp();
 
 void u2hts_i2c_init(uint32_t speed_hz);

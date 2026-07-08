@@ -13,6 +13,20 @@
 #include <stdio.h>   // printf
 #include <string.h>  // memcpy
 
+#ifdef U2HTS_ENABLE_FREERTOS
+#include "FreeRTOS.h"
+#include "task.h"
+
+#define U2HTS_TOUCH_TASK_STACK_SIZE 192
+#define U2HTS_TPS_RELEASE_TASK_STACK_SIZE 128
+#define U2HTS_KEY_TASK_STACK_SIZE 512
+
+#define U2HTS_TOUCH_TASK_PRIORITY tskIDLE_PRIORITY + 2
+#define U2HTS_TPS_RELEASE_TASK_PRIORITY tskIDLE_PRIORITY + 2
+#define U2HTS_KEY_TASK_PRIORITY tskIDLE_PRIORITY + 1
+
+#endif
+
 #define U2HTS_LOG_LEVEL_ERROR 0
 #define U2HTS_LOG_LEVEL_WARN 1
 #define U2HTS_LOG_LEVEL_INFO 2
@@ -30,7 +44,7 @@
 #define U2HTS_CONFIG_TIMEOUT 5000
 #endif
 
-#define U2HTS_TPS_RELEASE_TIMEOUT 10 * 1000  // 10 ms
+#define U2HTS_TPS_RELEASE_TIMEOUT 500
 #define U2HTS_DEFAULT_TP_WIDTH 0x30
 #define U2HTS_DEFAULT_TP_HEIGHT 0x30
 #define U2HTS_DEFAULT_TP_PRESSURE 0x30
@@ -64,6 +78,10 @@
 
 #ifndef __unused
 #define __unused __attribute__((__unused__))
+#endif
+
+#ifndef __weak_symbol
+#define __weak_symbol __attribute__((__weak__))
 #endif
 
 #ifndef U2HTS_MANU_STR
