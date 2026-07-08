@@ -5,6 +5,7 @@
   All rights reserved.
 */
 #include "u2hts_core.h"
+
 #include "u2hts_hid_report_descriptor.h"
 
 #ifndef U2HTS_GIT_SHA
@@ -44,7 +45,10 @@ static __unused const uint16_t u2hts_configs[] = {0x0, 0x320, 0x620, 0x520};
 #define U2HTS_GET_CONFIG_MODE_FLAG() U2HTS_CHECK_BIT(u2hts_status_mask, 1)
 #define U2HTS_GET_TPS_REMAIN_FLAG() U2HTS_CHECK_BIT(u2hts_status_mask, 2)
 
-#ifdef U2HTS_ENABLE_LED
+__weak_symbol void u2hts_led_set(bool on) { U2HTS_UNUSED(on); }
+__weak_symbol bool u2hts_usrkey_get() { return false; }
+__weak_symbol void u2hts_write_config(uint16_t cfg) { U2HTS_UNUSED(cfg); }
+__weak_symbol uint16_t u2hts_read_config() { return U2HTS_CONFIG_MAGIC; }
 
 static inline void u2hts_led_blink(uint16_t times) {
   for (uint16_t i = 0; i < times; i++) {
@@ -59,8 +63,6 @@ inline void u2hts_led_show_error_code(U2HTS_ERROR_CODES code) {
   u2hts_led_blink(code);
   u2hts_delay_ms(1000);
 }
-
-#endif
 
 void u2hts_i2c_mem_write(uint8_t slave_addr, uint32_t mem_addr,
                          size_t mem_addr_size, void* data, size_t data_len) {
@@ -180,8 +182,6 @@ void u2hts_set_tp(uint8_t tp_index, bool contact, uint8_t id, uint16_t x,
 #endif
 }
 
-#ifdef U2HTS_ENABLE_KEY
-
 inline static bool u2hts_get_key_timeout(uint32_t ms) {
   if (u2hts_usrkey_get()) {
     u2hts_delay_ms(ms);
@@ -192,17 +192,13 @@ inline static bool u2hts_get_key_timeout(uint32_t ms) {
 
 inline static void u2hts_handle_config() {
   U2HTS_LOG_INFO("Enter config mode");
-#ifdef U2HTS_ENABLE_LED
   u2hts_led_set(true);
-#endif
   u2hts_delay_ms(500);
 
   uint32_t u2hts_config_timeout = 0;
   uint8_t config_index = 0;
   do {
-#ifdef U2HTS_ENABLE_LED
     u2hts_led_set(true);
-#endif
     if (u2hts_get_key_timeout(20)) {
       u2hts_config_timeout = 0;
       config_index =
@@ -210,9 +206,7 @@ inline static void u2hts_handle_config() {
               ? config_index + 1
               : 0;
       U2HTS_LOG_INFO("switching config %d", config_index);
-#ifdef U2HTS_ENABLE_LED
       u2hts_led_blink(config_index + 1);
-#endif
     } else {
       u2hts_delay_ms(1);
       u2hts_config_timeout++;
@@ -224,13 +218,10 @@ inline static void u2hts_handle_config() {
       "Applyed config : x_y_swap = %d, x_invert = %d, y_invert = %d",
       config->coord_config.x_y_swap, config->coord_config.x_invert,
       config->coord_config.y_invert);
-#ifdef U2HTS_ENABLE_PERSISTENT_CONFIG
   U2HTS_LOG_INFO("Saving config");
   u2hts_save_config(config);
-#endif
   U2HTS_SET_CONFIG_MODE_FLAG(0);
 }
-#endif
 
 inline static void u2hts_list_touch_controller() {
 #if U2HTS_LOG_LEVEL >= U2HTS_LOG_LEVEL_INFO
@@ -344,12 +335,10 @@ inline U2HTS_ERROR_CODES u2hts_init(u2hts_config* cfg) {
 
   U2HTS_LOG_DEBUG("This is a DEBUG build and expect low report rate!");
 
-#ifdef U2HTS_ENABLE_PERSISTENT_CONFIG
   if (u2hts_config_exists())
     u2hts_load_config(config);
   else
     u2hts_save_config(config);
-#endif
 
   if (config->bus_type != UB_I2C && !strcmp(config->controller, "auto")) {
     U2HTS_LOG_ERROR("Bus type %d does not support controller detection",
@@ -540,14 +529,12 @@ inline static void u2hts_handle_touch() {
 }
 
 inline void u2hts_task() {
-#ifdef U2HTS_ENABLE_KEY
   if (U2HTS_GET_CONFIG_MODE_FLAG())
     u2hts_handle_config();
   else {
     if (u2hts_usrkey_get())
       U2HTS_SET_CONFIG_MODE_FLAG(u2hts_get_key_timeout(1000));
     else {
-#endif
       if (!touch_controller->report_mode && U2HTS_GET_TPS_REMAIN_FLAG()) {
         if (u2hts_tps_release_timeout > U2HTS_TPS_RELEASE_TIMEOUT &&
             u2hts_get_usb_status()) {
@@ -561,16 +548,11 @@ inline void u2hts_task() {
 
       u2hts_ts_irq_set(!config->polling_mode && u2hts_get_usb_status());
 
-#ifdef U2HTS_ENABLE_LED
       u2hts_led_set(!u2hts_get_usb_status());
-#endif
 
       if ((config->polling_mode ? true : U2HTS_GET_IRQ_STATUS_FLAG()) &&
           u2hts_get_usb_status())
         u2hts_handle_touch();
-
-#ifdef U2HTS_ENABLE_KEY
     }
   }
-#endif
 }

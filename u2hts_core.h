@@ -318,16 +318,13 @@ inline static uint32_t u2hts_get_custom_config_u32(const char* config_name,
   return result;
 }
 
-#ifdef U2HTS_ENABLE_LED
 typedef struct {
   bool state;
   uint32_t delay_ms;
 } u2hts_led_pattern;
 
 void u2hts_led_show_error_code(U2HTS_ERROR_CODES code);
-#endif
 
-#ifdef U2HTS_ENABLE_PERSISTENT_CONFIG
 #define U2HTS_CONFIG_MAGIC 0xBA
 
 typedef union {
@@ -366,6 +363,5 @@ inline static bool u2hts_config_exists() {
   U2HTS_LOG_DEBUG("%s: mask.value = 0x%x", __func__, mask.value);
   return (mask.magic == U2HTS_CONFIG_MAGIC);
 }
-#endif
 
 #endif
