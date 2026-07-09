@@ -13,20 +13,6 @@
 #include <stdio.h>   // printf
 #include <string.h>  // memcpy
 
-#ifdef U2HTS_ENABLE_FREERTOS
-#include "FreeRTOS.h"
-#include "task.h"
-
-#define U2HTS_TOUCH_TASK_STACK_SIZE 192
-#define U2HTS_TPS_RELEASE_TASK_STACK_SIZE 128
-#define U2HTS_KEY_TASK_STACK_SIZE 512
-
-#define U2HTS_TOUCH_TASK_PRIORITY tskIDLE_PRIORITY + 2
-#define U2HTS_TPS_RELEASE_TASK_PRIORITY tskIDLE_PRIORITY + 2
-#define U2HTS_KEY_TASK_PRIORITY tskIDLE_PRIORITY + 1
-
-#endif
-
 #define U2HTS_LOG_LEVEL_ERROR 0
 #define U2HTS_LOG_LEVEL_WARN 1
 #define U2HTS_LOG_LEVEL_INFO 2
@@ -160,6 +146,25 @@
       __section__(                                                           \
           ".u2hts_touch_controllers"))) static const u2hts_touch_controller* \
       u2hts_touch_controller_##controller = &controller
+
+#ifdef U2HTS_ENABLE_FREERTOS
+#include "FreeRTOS.h"
+#include "task.h"
+#if U2HTS_LOG_LEVEL == U2HTS_LOG_LEVEL_DEBUG
+#define U2HTS_TOUCH_TASK_STACK_SIZE 1024
+#define U2HTS_TPS_RELEASE_TASK_STACK_SIZE 1024
+#define U2HTS_KEY_TASK_STACK_SIZE 1024
+#else
+#define U2HTS_TOUCH_TASK_STACK_SIZE 128
+#define U2HTS_TPS_RELEASE_TASK_STACK_SIZE 128
+#define U2HTS_KEY_TASK_STACK_SIZE 192
+#endif
+
+#define U2HTS_TOUCH_TASK_PRIORITY tskIDLE_PRIORITY + 2
+#define U2HTS_TPS_RELEASE_TASK_PRIORITY tskIDLE_PRIORITY + 2
+#define U2HTS_KEY_TASK_PRIORITY tskIDLE_PRIORITY + 1
+
+#endif
 
 void u2hts_set_tp_count(uint8_t tp_count);
 #define U2HTS_SET_TP_COUNT_SAFE(TP_COUNT) \

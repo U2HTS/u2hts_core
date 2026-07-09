@@ -18,7 +18,7 @@ extern u2hts_touch_controller *__u2hts_touch_controllers_begin,
 
 static u2hts_touch_controller* touch_controller = NULL;
 static u2hts_config* config = NULL;
-static uint16_t u2hts_tps_last_ts = 0;
+static uint16_t u2hts_last_report_ts = 0;
 __aligned(4) static u2hts_hid_report u2hts_report, u2hts_previous_report;
 static uint16_t u2hts_tp_ids_mask = 0;
 // union u2hts_status_mask {
@@ -42,8 +42,11 @@ static __unused const uint16_t u2hts_configs[] = {0x0, 0x320, 0x620, 0x520};
 static TaskHandle_t u2hts_touch_task_handle = NULL;
 static StackType_t
     u2hts_touch_task_stack[U2HTS_TOUCH_TASK_STACK_SIZE] = {0},
-    u2hts_tps_release_task_stack[U2HTS_TPS_RELEASE_TASK_STACK_SIZE] = {0},
-    u2hts_key_task_stack[U2HTS_KEY_TASK_STACK_SIZE] = {0};
+    u2hts_tps_release_task_stack[U2HTS_TPS_RELEASE_TASK_STACK_SIZE] = {0};
+
+#ifdef U2HTS_ENABLE_KEY
+static StackType_t u2hts_key_task_stack[U2HTS_KEY_TASK_STACK_SIZE] = {0};
+#endif
 
 static StaticTask_t u2hts_touch_tcb = {0}, u2hts_tps_release_tcb = {0},
                     u2hts_key_tcb = {0};
@@ -401,7 +404,7 @@ inline static void u2hts_handle_touch() {
   if (!touch_controller->report_mode) {
     u2hts_previous_report = u2hts_report;
     U2HTS_SET_TPS_REMAIN_FLAG((u2hts_previous_report.tp_count > 0));
-    u2hts_tps_last_ts = u2hts_get_timestamp();
+    u2hts_last_report_ts = u2hts_get_timestamp();
   }
 }
 
@@ -412,16 +415,17 @@ inline static void u2hts_release_tps() {
   u2hts_usb_report(&u2hts_previous_report);
   u2hts_tp_ids_mask = 0;
   U2HTS_SET_TPS_REMAIN_FLAG(0);
-  u2hts_tps_last_ts = u2hts_get_timestamp();
+  u2hts_last_report_ts = u2hts_get_timestamp();
 }
 
 #ifdef U2HTS_ENABLE_FREERTOS
 
 static void u2hts_touch_task(void* pvParameters) {
   while (1) {
-    if (config->polling_mode)
+    if (config->polling_mode) {
       u2hts_handle_touch();
-    else {
+      u2hts_delay_ms(1);  // yield for other tasks
+    } else {
       ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(10));
       if (u2hts_get_usb_status() && U2HTS_GET_IRQ_STATUS_FLAG())
         u2hts_handle_touch();
@@ -435,14 +439,14 @@ static void u2hts_tps_release_task(void* pvParameters) {
   while (1) {
     u2hts_delay_ms(10);
     if (u2hts_get_usb_status() && U2HTS_GET_TPS_REMAIN_FLAG() &&
-        (uint16_t)(u2hts_get_timestamp() - u2hts_tps_last_ts) >
+        (uint16_t)(u2hts_get_timestamp() - u2hts_last_report_ts) >
             U2HTS_TPS_RELEASE_TIMEOUT) {
       U2HTS_LOG_DEBUG("releasing remain tps");
       u2hts_release_tps();
     }
   }
 }
-
+#ifdef U2HTS_ENABLE_KEY
 static void u2hts_key_task(void* pvParameters) {
   while (1) {
     u2hts_delay_ms(10);
@@ -452,7 +456,7 @@ static void u2hts_key_task(void* pvParameters) {
     }
   }
 }
-
+#endif
 #endif
 
 inline U2HTS_ERROR_CODES u2hts_init(u2hts_config* cfg) {
@@ -611,9 +615,11 @@ inline U2HTS_ERROR_CODES u2hts_init(u2hts_config* cfg) {
                     U2HTS_TPS_RELEASE_TASK_STACK_SIZE, NULL,
                     U2HTS_TPS_RELEASE_TASK_PRIORITY,
                     u2hts_tps_release_task_stack, &u2hts_tps_release_tcb);
+#ifdef U2HTS_ENABLE_KEY
   xTaskCreateStatic(u2hts_key_task, "u2hts_key_task", U2HTS_KEY_TASK_STACK_SIZE,
                     NULL, U2HTS_KEY_TASK_PRIORITY, u2hts_key_task_stack,
                     &u2hts_key_tcb);
+#endif
 #endif
   U2HTS_LOG_DEBUG("Exit %s, u2hts_error = %d", __func__, u2hts_error);
   return u2hts_error;
@@ -627,7 +633,7 @@ inline void u2hts_task() {
       U2HTS_SET_CONFIG_MODE_FLAG(u2hts_get_key_timeout(1000));
     else {
       if (!touch_controller->report_mode && U2HTS_GET_TPS_REMAIN_FLAG()) {
-        if ((uint16_t)(u2hts_get_timestamp() - u2hts_tps_last_ts) >
+        if ((uint16_t)(u2hts_get_timestamp() - u2hts_last_report_ts) >
                 U2HTS_TPS_RELEASE_TIMEOUT &&
             u2hts_get_usb_status()) {
           U2HTS_LOG_DEBUG("releasing remain tps");
