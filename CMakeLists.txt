@@ -14,11 +14,11 @@ if(NOT GIT_FOUND OR NOT GIT_RET EQUAL 0 OR U2HTS_GIT_SHA STREQUAL "")
     set(U2HTS_GIT_SHA "UNKNOWN")
 endif()
 
-add_library(u2hts_core_settings INTERFACE)
+add_library(u2hts_core_config INTERFACE)
 
 set(U2HTS_MAX_TPS 10 CACHE STRING "U2HTS max touch points")
 
-target_compile_definitions(u2hts_core_settings INTERFACE 
+target_compile_definitions(u2hts_core_config INTERFACE 
     U2HTS_MAX_TPS=${U2HTS_MAX_TPS}
 )
 
@@ -39,7 +39,7 @@ set(U2HTS_HID_REPORT_DESCRIPTOR_DEF
     U2HTS_HID_REPORT_DESCRIPTOR_END"
 )
 
-target_compile_definitions(u2hts_core_settings INTERFACE
+target_compile_definitions(u2hts_core_config INTERFACE
     ${U2HTS_HID_REPORT_DESCRIPTOR_DEF}
 )
 
@@ -54,7 +54,7 @@ target_include_directories(u2hts_core PUBLIC
 )
 
 target_link_libraries(u2hts_core PUBLIC
-    u2hts_core_settings
+    u2hts_core_config
 )
 
 target_compile_definitions(u2hts_core PRIVATE

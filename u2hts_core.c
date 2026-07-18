@@ -53,6 +53,10 @@ static StaticTask_t u2hts_touch_tcb = {0}, u2hts_tps_release_tcb = {0},
 __weak_symbol void u2hts_delay_ms(uint32_t ms) {
   vTaskDelay(pdMS_TO_TICKS(ms));
 }
+
+__weak_symbol uint16_t u2hts_get_timestamp()  {
+  return xTaskGetTickCount() * portTICK_PERIOD_MS;
+}
 #endif
 
 #define U2HTS_SET_IRQ_STATUS_FLAG(x) U2HTS_SET_BIT(u2hts_status_mask, 0, x)
@@ -422,12 +426,12 @@ inline static void u2hts_release_tps() {
 
 static void u2hts_touch_task(void* pvParameters) {
   while (1) {
-    if (config->polling_mode) {
+    if (config->polling_mode && u2hts_get_usb_status()) {
       u2hts_handle_touch();
       u2hts_delay_ms(1);  // yield for other tasks
     } else {
       ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(10));
-      if (u2hts_get_usb_status() && U2HTS_GET_IRQ_STATUS_FLAG())
+      if (U2HTS_GET_IRQ_STATUS_FLAG() && u2hts_get_usb_status())
         u2hts_handle_touch();
       u2hts_ts_irq_set(!config->polling_mode && u2hts_get_usb_status());
     }
