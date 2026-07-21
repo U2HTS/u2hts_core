@@ -5,7 +5,7 @@
 #define U2HTS_HID_REPORT_TP_MAX_COUNT_ID 2
 #define U2HTS_HID_REPORT_TP_MS_THQA_CERT_ID 3
 
-#ifdef U2HTS_ENABLE_COMPACT_REPORT
+#if U2HTS_ENABLE_COMPACT_REPORT
 #define U2HTS_HID_REPORT_TP                                                                                            \
   0x09, 0x22,           /* (LOCAL)  USAGE              Touch Point */                                                  \
       0xA1, 0x02,       /* (MAIN)   COLLECTION         Logical */                                                      \

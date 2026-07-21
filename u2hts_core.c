@@ -37,14 +37,14 @@ static uint8_t u2hts_status_mask = 0x00;
 // x_y_swap, y_invert 270
 static __unused const uint16_t u2hts_configs[] = {0x0, 0x320, 0x620, 0x520};
 
-#ifdef U2HTS_ENABLE_FREERTOS
+#if U2HTS_ENABLE_FREERTOS
 
 static TaskHandle_t u2hts_touch_task_handle = NULL;
 static StackType_t
     u2hts_touch_task_stack[U2HTS_TOUCH_TASK_STACK_SIZE] = {0},
     u2hts_tps_release_task_stack[U2HTS_TPS_RELEASE_TASK_STACK_SIZE] = {0};
 
-#ifdef U2HTS_ENABLE_KEY
+#if U2HTS_ENABLE_KEY
 static StackType_t u2hts_key_task_stack[U2HTS_KEY_TASK_STACK_SIZE] = {0};
 static StaticTask_t u2hts_key_tcb = {0};
 #endif
@@ -135,7 +135,7 @@ inline void u2hts_ts_irq_status_set(bool status) {
   u2hts_ts_irq_set(false);
   U2HTS_LOG_DEBUG("ts irq triggered");
   U2HTS_SET_IRQ_STATUS_FLAG(status);
-#ifdef U2HTS_ENABLE_FREERTOS
+#if U2HTS_ENABLE_FREERTOS
   BaseType_t hptw = pdFALSE;
   vTaskNotifyGiveFromISR(u2hts_touch_task_handle, &hptw);
   portYIELD_FROM_ISR(hptw);
@@ -196,7 +196,7 @@ void u2hts_set_tp(uint8_t tp_index, bool contact, uint8_t id, uint16_t x,
   if (config->coord_config.y_invert)
     u2hts_report.tp[tp_index].y =
         U2HTS_LOGICAL_MAX - u2hts_report.tp[tp_index].y;
-#ifdef U2HTS_ENABLE_COMPACT_REPORT
+#if U2HTS_ENABLE_COMPACT_REPORT
   U2HTS_UNUSED(width);
   U2HTS_UNUSED(height);
   U2HTS_UNUSED(pressure);
@@ -247,7 +247,7 @@ inline static void u2hts_handle_config() {
   U2HTS_LOG_INFO("Saving config");
   u2hts_save_config(config);
   U2HTS_SET_CONFIG_MODE_FLAG(0);
-#ifdef U2HTS_ENABLE_FREERTOS
+#if U2HTS_ENABLE_FREERTOS
   vTaskResume(u2hts_touch_task_handle);
 #endif
 }
@@ -381,7 +381,7 @@ inline static void u2hts_handle_touch() {
   if (!touch_controller->report_mode) u2hts_append_released_tps();
 
   for (uint8_t i = 0; i < u2hts_report.tp_count; i++) {
-#ifdef U2HTS_ENABLE_COMPACT_REPORT
+#if U2HTS_ENABLE_COMPACT_REPORT
     U2HTS_LOG_DEBUG(
         "report.tp[%d].contact = %d, report.tp[i].x = %d, "
         "report.tp[i].y = %d, report.tp[i].id = %d",
@@ -422,7 +422,7 @@ inline static void u2hts_release_tps() {
   u2hts_last_report_ts = u2hts_get_timestamp();
 }
 
-#ifdef U2HTS_ENABLE_FREERTOS
+#if U2HTS_ENABLE_FREERTOS
 
 static void u2hts_touch_task(void* pvParameters) {
   while (1) {
@@ -450,7 +450,7 @@ static void u2hts_tps_release_task(void* pvParameters) {
     }
   }
 }
-#ifdef U2HTS_ENABLE_KEY
+#if U2HTS_ENABLE_KEY
 static void u2hts_key_task(void* pvParameters) {
   while (1) {
     u2hts_delay_ms(10);
@@ -470,16 +470,16 @@ inline U2HTS_ERROR_CODES u2hts_init(u2hts_config* cfg) {
   U2HTS_LOG_INFO("U2HTS " U2HTS_GIT_SHA " built @ %s %s with feature%s",
                  __DATE__, __TIME__,
                  ""
-#ifdef U2HTS_ENABLE_LED
+#if U2HTS_ENABLE_LED
                  " U2HTS_ENABLE_LED"
 #endif
-#ifdef U2HTS_ENABLE_KEY
+#if U2HTS_ENABLE_KEY
                  " U2HTS_ENABLE_KEY"
 #endif
-#ifdef U2HTS_ENABLE_PERSISTENT_CONFIG
+#if U2HTS_ENABLE_PERSISTENT_CONFIG
                  " U2HTS_ENABLE_PERSISTENT_CONFIG"
 #endif
-#ifdef U2HTS_ENABLE_FREERTOS
+#if U2HTS_ENABLE_FREERTOS
                  " U2HTS_ENABLE_FREERTOS"
 #endif
   );
@@ -611,7 +611,7 @@ inline U2HTS_ERROR_CODES u2hts_init(u2hts_config* cfg) {
   u2hts_usb_init();
   if (!config->polling_mode) u2hts_ts_irq_init(touch_controller->irq_type);
 
-#ifdef U2HTS_ENABLE_FREERTOS
+#if U2HTS_ENABLE_FREERTOS
   u2hts_touch_task_handle = xTaskCreateStatic(
       u2hts_touch_task, "u2hts_touch_task", U2HTS_TOUCH_TASK_STACK_SIZE, NULL,
       U2HTS_TOUCH_TASK_PRIORITY, u2hts_touch_task_stack, &u2hts_touch_tcb);
@@ -619,7 +619,7 @@ inline U2HTS_ERROR_CODES u2hts_init(u2hts_config* cfg) {
                     U2HTS_TPS_RELEASE_TASK_STACK_SIZE, NULL,
                     U2HTS_TPS_RELEASE_TASK_PRIORITY,
                     u2hts_tps_release_task_stack, &u2hts_tps_release_tcb);
-#ifdef U2HTS_ENABLE_KEY
+#if U2HTS_ENABLE_KEY
   xTaskCreateStatic(u2hts_key_task, "u2hts_key_task", U2HTS_KEY_TASK_STACK_SIZE,
                     NULL, U2HTS_KEY_TASK_PRIORITY, u2hts_key_task_stack,
                     &u2hts_key_tcb);
