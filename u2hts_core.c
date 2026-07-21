@@ -46,15 +46,15 @@ static StackType_t
 
 #ifdef U2HTS_ENABLE_KEY
 static StackType_t u2hts_key_task_stack[U2HTS_KEY_TASK_STACK_SIZE] = {0};
+static StaticTask_t u2hts_key_tcb = {0};
 #endif
 
-static StaticTask_t u2hts_touch_tcb = {0}, u2hts_tps_release_tcb = {0},
-                    u2hts_key_tcb = {0};
+static StaticTask_t u2hts_touch_tcb = {0}, u2hts_tps_release_tcb = {0};
 __weak_symbol void u2hts_delay_ms(uint32_t ms) {
   vTaskDelay(pdMS_TO_TICKS(ms));
 }
 
-__weak_symbol uint16_t u2hts_get_timestamp()  {
+__weak_symbol uint16_t u2hts_get_timestamp() {
   return xTaskGetTickCount() * portTICK_PERIOD_MS;
 }
 #endif
