@@ -147,7 +147,7 @@
           ".u2hts_touch_controllers"))) static const u2hts_touch_controller* \
       u2hts_touch_controller_##controller = &controller
 
-#if U2HTS_ENABLE_FREERTOS
+#ifdef U2HTS_ENABLE_FREERTOS
 #include "FreeRTOS.h"
 #include "task.h"
 
@@ -239,7 +239,7 @@ typedef enum {
 typedef struct __packed {
   bool contact : 1;
   uint8_t id : 7;
-#if U2HTS_ENABLE_COMPACT_REPORT
+#ifdef U2HTS_ENABLE_COMPACT_REPORT
   uint16_t x : 12;
   uint16_t y : 12;
 #else
