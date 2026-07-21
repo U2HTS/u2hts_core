@@ -14,16 +14,30 @@ if(NOT GIT_FOUND OR NOT GIT_RET EQUAL 0 OR U2HTS_GIT_SHA STREQUAL "")
     set(U2HTS_GIT_SHA "UNKNOWN")
 endif()
 
-add_library(u2hts_core_config INTERFACE)
+# ===== Configurable options (override with -D or set(... CACHE ... FORCE) before add_subdirectory) =====
+set(U2HTS_MAX_TPS 10 CACHE STRING "Max touch points")
+set(U2HTS_LOG_LEVEL "U2HTS_LOG_LEVEL_INFO" CACHE STRING "Log level (U2HTS_LOG_LEVEL_ERROR|WARN|INFO|DEBUG)")
+set_property(CACHE U2HTS_LOG_LEVEL PROPERTY STRINGS
+    "U2HTS_LOG_LEVEL_ERROR"
+    "U2HTS_LOG_LEVEL_WARN"
+    "U2HTS_LOG_LEVEL_INFO"
+    "U2HTS_LOG_LEVEL_DEBUG"
+)
+set(U2HTS_ENABLE_LED OFF CACHE BOOL "Enable LED support")
+set(U2HTS_ENABLE_KEY OFF CACHE BOOL "Enable key support")
+set(U2HTS_ENABLE_PERSISTENT_CONFIG OFF CACHE BOOL "Enable persistent config")
+set(U2HTS_ENABLE_COMPACT_REPORT OFF CACHE BOOL "Enable compact HID report")
+set(U2HTS_CONFIG_TIMEOUT 5000 CACHE STRING "Config mode timeout (ms)")
+set(U2HTS_ENABLE_FREERTOS OFF CACHE BOOL "Enable FreeRTOS support")
 
-set(U2HTS_MAX_TPS 10 CACHE STRING "U2HTS max touch points")
-
-target_compile_definitions(u2hts_core_config INTERFACE 
-    U2HTS_MAX_TPS=${U2HTS_MAX_TPS}
+add_library(u2hts_core STATIC 
+    ${CMAKE_CURRENT_LIST_DIR}/u2hts_core.c
 )
 
-# override U2HTS_HID_REPORT_DESCRIPTOR
-function(u2hts_generate_hid_report_descriptor)
+target_include_directories(u2hts_core PUBLIC
+    ${CMAKE_CURRENT_LIST_DIR}
+)
+
 foreach(i RANGE 1 ${U2HTS_MAX_TPS})
     list(APPEND U2HTS_TPS "U2HTS_HID_REPORT_TP")
 endforeach()
@@ -39,22 +53,16 @@ set(U2HTS_HID_REPORT_DESCRIPTOR_DEF
     U2HTS_HID_REPORT_DESCRIPTOR_END"
 )
 
-target_compile_definitions(u2hts_core_config INTERFACE
+target_compile_definitions(u2hts_core PUBLIC
+    U2HTS_MAX_TPS=${U2HTS_MAX_TPS}
+    U2HTS_LOG_LEVEL=${U2HTS_LOG_LEVEL}
+    U2HTS_CONFIG_TIMEOUT=${U2HTS_CONFIG_TIMEOUT}
+    $<$<BOOL:${U2HTS_ENABLE_LED}>:U2HTS_ENABLE_LED>
+    $<$<BOOL:${U2HTS_ENABLE_KEY}>:U2HTS_ENABLE_KEY>
+    $<$<BOOL:${U2HTS_ENABLE_PERSISTENT_CONFIG}>:U2HTS_ENABLE_PERSISTENT_CONFIG>
+    $<$<BOOL:${U2HTS_ENABLE_COMPACT_REPORT}>:U2HTS_ENABLE_COMPACT_REPORT>
+    $<$<BOOL:${U2HTS_ENABLE_FREERTOS}>:U2HTS_ENABLE_FREERTOS>
     ${U2HTS_HID_REPORT_DESCRIPTOR_DEF}
-)
-
-endfunction(u2hts_generate_hid_report_descriptor)
-
-add_library(u2hts_core STATIC 
-    ${CMAKE_CURRENT_LIST_DIR}/u2hts_core.c
-)
-
-target_include_directories(u2hts_core PUBLIC
-    ${CMAKE_CURRENT_LIST_DIR}
-)
-
-target_link_libraries(u2hts_core PUBLIC
-    u2hts_core_config
 )
 
 target_compile_definitions(u2hts_core PRIVATE
