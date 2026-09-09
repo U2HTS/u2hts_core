@@ -37,12 +37,12 @@ static uint8_t u2hts_status_mask = 0x00;
 static __unused const uint16_t u2hts_configs[] = {0x0, 0x320, 0x620, 0x520};
 
 #ifdef U2HTS_ENABLE_FREERTOS
-
 static TaskHandle_t u2hts_touch_task_handle = NULL;
 static StackType_t
     u2hts_touch_task_stack[U2HTS_TOUCH_TASK_STACK_SIZE] = {0},
     u2hts_tps_release_task_stack[U2HTS_TPS_RELEASE_TASK_STACK_SIZE] = {0};
-
+SemaphoreHandle_t u2hts_log_print_mutex = NULL;
+static StaticSemaphore_t u2hts_log_print_mutex_buf = {0};
 #ifdef U2HTS_ENABLE_KEY
 static StackType_t u2hts_key_task_stack[U2HTS_KEY_TASK_STACK_SIZE] = {0};
 static StaticTask_t u2hts_key_tcb = {0};
@@ -130,10 +130,9 @@ void u2hts_i2c_mem_read(uint8_t slave_addr, uint32_t mem_addr,
     U2HTS_LOG_ERROR("%s error, addr = 0x%x, ret = %d", __func__, mem_addr, ret);
 }
 
-inline void u2hts_ts_irq_status_set(bool status) {
-  u2hts_ts_irq_set(false);
-  U2HTS_LOG_DEBUG("ts irq triggered");
-  U2HTS_SET_IRQ_STATUS_FLAG(status);
+inline void u2hts_irq_handler() {
+  u2hts_irq_set(false);
+  U2HTS_SET_IRQ_STATUS_FLAG(1);
 #ifdef U2HTS_ENABLE_FREERTOS
   BaseType_t hptw = pdFALSE;
   vTaskNotifyGiveFromISR(u2hts_touch_task_handle, &hptw);
@@ -403,7 +402,7 @@ inline static void u2hts_handle_touch() {
   U2HTS_LOG_DEBUG("report.scan_time = %d, report.tp_count = %d",
                   u2hts_report.scan_time, u2hts_report.tp_count);
   u2hts_delay_ms(config->report_delay);
-  u2hts_usb_report(&u2hts_report);
+  u2hts_usb_hid_report(&u2hts_report);
   if (!touch_controller->report_mode) {
     u2hts_previous_report = u2hts_report;
     U2HTS_SET_TPS_REMAIN_FLAG((u2hts_previous_report.tp_count > 0));
@@ -415,7 +414,7 @@ inline static void u2hts_release_tps() {
   for (uint8_t i = 0; i < u2hts_previous_report.tp_count; i++)
     u2hts_previous_report.tp[i].contact = false;
   u2hts_previous_report.scan_time = u2hts_get_timestamp();
-  u2hts_usb_report(&u2hts_previous_report);
+  u2hts_usb_hid_report(&u2hts_previous_report);
   u2hts_tp_ids_mask = 0;
   U2HTS_SET_TPS_REMAIN_FLAG(0);
   u2hts_last_report_ts = u2hts_get_timestamp();
@@ -432,7 +431,7 @@ static void u2hts_touch_task(void* pvParameters) {
       ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(10));
       if (U2HTS_GET_IRQ_STATUS_FLAG() && u2hts_get_usb_status())
         u2hts_handle_touch();
-      u2hts_ts_irq_set(!config->polling_mode && u2hts_get_usb_status());
+      u2hts_irq_set(!config->polling_mode && u2hts_get_usb_status());
     }
     u2hts_led_set(!u2hts_get_usb_status());
   }
@@ -608,9 +607,11 @@ inline U2HTS_ERROR_CODES u2hts_init(u2hts_config* cfg) {
       config->coord_config.x_invert, config->coord_config.y_invert,
       config->polling_mode);
   u2hts_usb_init();
-  if (!config->polling_mode) u2hts_ts_irq_init(touch_controller->irq_type);
+  if (!config->polling_mode) u2hts_irq_init(touch_controller->irq_type);
 
 #ifdef U2HTS_ENABLE_FREERTOS
+  u2hts_log_print_mutex = xSemaphoreCreateMutexStatic(&u2hts_log_print_mutex_buf);
+
   u2hts_touch_task_handle = xTaskCreateStatic(
       u2hts_touch_task, "u2hts_touch_task", U2HTS_TOUCH_TASK_STACK_SIZE, NULL,
       U2HTS_TOUCH_TASK_PRIORITY, u2hts_touch_task_stack, &u2hts_touch_tcb);
@@ -644,7 +645,7 @@ inline void u2hts_task() {
         }
       }
 
-      u2hts_ts_irq_set(!config->polling_mode && u2hts_get_usb_status());
+      u2hts_irq_set(!config->polling_mode && u2hts_get_usb_status());
 
       u2hts_led_set(!u2hts_get_usb_status());
 

@@ -85,70 +85,24 @@
 // UH in ascii
 #define U2HTS_USB_PID 0x8572
 #endif
-
 // USB VID depends on MCU implementation.
-
-#if U2HTS_LOG_LEVEL >= U2HTS_LOG_LEVEL_ERROR
-#define U2HTS_LOG_ERROR(...) \
-  do {                       \
-    printf("ERROR: ");       \
-    printf(__VA_ARGS__);     \
-    printf("\n");            \
-  } while (0)
-#else
-#define U2HTS_LOG_ERROR(...) U2HTS_UNUSED(0)
-#endif
-
-#if U2HTS_LOG_LEVEL >= U2HTS_LOG_LEVEL_WARN
-#define U2HTS_LOG_WARN(...) \
-  do {                      \
-    printf("WARN: ");       \
-    printf(__VA_ARGS__);    \
-    printf("\n");           \
-  } while (0)
-#else
-#define U2HTS_LOG_WARN(...) U2HTS_UNUSED(0)
-#endif
-
-#if U2HTS_LOG_LEVEL >= U2HTS_LOG_LEVEL_INFO
-#define U2HTS_LOG_INFO(...) \
-  do {                      \
-    printf("INFO: ");       \
-    printf(__VA_ARGS__);    \
-    printf("\n");           \
-  } while (0)
-#else
-#define U2HTS_LOG_INFO(...) U2HTS_UNUSED(0)
-#endif
-
-#if U2HTS_LOG_LEVEL >= U2HTS_LOG_LEVEL_DEBUG
-#define U2HTS_LOG_DEBUG(...) \
-  do {                       \
-    printf("DEBUG: ");       \
-    printf(__VA_ARGS__);     \
-    printf("\n");            \
-  } while (0)
-#else
-#define U2HTS_LOG_DEBUG(...) U2HTS_UNUSED(0)
-#endif
-
-#define U2HTS_MAP_VALUE(value, min, max) (((value) * (max)) / (min))
-
-#define U2HTS_SET_BIT(val, bit, set) \
-  ((set) ? ((val) |= (1U << (bit))) : ((val) &= ~(1U << (bit))))
-
-#define U2HTS_CHECK_BIT(val, bit) ((val >> (bit)) & 1)
-
-#define U2HTS_TOUCH_CONTROLLER(controller)                                   \
-  __attribute__((                                                            \
-      __used__,                                                              \
-      __section__(                                                           \
-          ".u2hts_touch_controllers"))) static const u2hts_touch_controller* \
-      u2hts_touch_controller_##controller = &controller
 
 #ifdef U2HTS_ENABLE_FREERTOS
 #include "FreeRTOS.h"
 #include "task.h"
+#include "semphr.h"
+
+extern SemaphoreHandle_t u2hts_log_print_mutex;
+#define _U2HTS_LOG(LOG_LEVEL, ...)                             \
+  do {                                                         \
+    if (xTaskGetSchedulerState() != taskSCHEDULER_NOT_STARTED) \
+      xSemaphoreTake(u2hts_log_print_mutex, portMAX_DELAY);    \
+    printf(LOG_LEVEL ": ");                                    \
+    printf(__VA_ARGS__);                                       \
+    printf("\n");                                              \
+    if (xTaskGetSchedulerState() != taskSCHEDULER_NOT_STARTED) \
+      xSemaphoreGive(u2hts_log_print_mutex);                   \
+  } while (0)
 
 #ifndef U2HTS_TOUCH_TASK_STACK_SIZE
 #define U2HTS_TOUCH_TASK_STACK_SIZE 512
@@ -173,8 +127,52 @@
 #ifndef U2HTS_KEY_TASK_PRIORITY
 #define U2HTS_KEY_TASK_PRIORITY tskIDLE_PRIORITY + 1
 #endif
-
+#else
+#define _U2HTS_LOG(LOG_LEVEL, ...) \
+  do {                             \
+    printf(LOG_LEVEL ": ");        \
+    printf(__VA_ARGS__);           \
+    printf("\n");                  \
+  } while (0)
 #endif
+
+#if U2HTS_LOG_LEVEL >= U2HTS_LOG_LEVEL_ERROR
+#define U2HTS_LOG_ERROR(...) _U2HTS_LOG("ERROR", __VA_ARGS__)
+#else
+#define U2HTS_LOG_ERROR(...) U2HTS_UNUSED(0)
+#endif
+
+#if U2HTS_LOG_LEVEL >= U2HTS_LOG_LEVEL_WARN
+#define U2HTS_LOG_WARN(...) _U2HTS_LOG("WARN", __VA_ARGS__)
+#else
+#define U2HTS_LOG_WARN(...) U2HTS_UNUSED(0)
+#endif
+
+#if U2HTS_LOG_LEVEL >= U2HTS_LOG_LEVEL_INFO
+#define U2HTS_LOG_INFO(...) _U2HTS_LOG("INFO", __VA_ARGS__)
+#else
+#define U2HTS_LOG_INFO(...) U2HTS_UNUSED(0)
+#endif
+
+#if U2HTS_LOG_LEVEL >= U2HTS_LOG_LEVEL_DEBUG
+#define U2HTS_LOG_(...) _U2HTS_LOG("DEBUG", __VA_ARGS__)
+#else
+#define U2HTS_LOG_DEBUG(...) U2HTS_UNUSED(0)
+#endif
+
+#define U2HTS_MAP_VALUE(value, min, max) (((value) * (max)) / (min))
+
+#define U2HTS_SET_BIT(val, bit, set) \
+  ((set) ? ((val) |= (1U << (bit))) : ((val) &= ~(1U << (bit))))
+
+#define U2HTS_CHECK_BIT(val, bit) ((val >> (bit)) & 1)
+
+#define U2HTS_TOUCH_CONTROLLER(controller)                                   \
+  __attribute__((                                                            \
+      __used__,                                                              \
+      __section__(                                                           \
+          ".u2hts_touch_controllers"))) static const u2hts_touch_controller* \
+      u2hts_touch_controller_##controller = &controller
 
 void u2hts_set_tp_count(uint8_t tp_count);
 #define U2HTS_SET_TP_COUNT_SAFE(TP_COUNT) \
@@ -326,7 +324,7 @@ void u2hts_i2c_mem_write(uint8_t slave_addr, uint32_t mem_addr,
 void u2hts_i2c_mem_read(uint8_t slave_addr, uint32_t mem_addr,
                         size_t mem_addr_size, void* data, size_t data_len);
 
-void u2hts_ts_irq_status_set(bool status);
+void u2hts_irq_handler();
 void u2hts_apply_config(u2hts_config* cfg, uint8_t config_index);
 void u2hts_set_tp(uint8_t tp_index, bool contact, uint8_t id, uint16_t x,
                   uint16_t y, uint8_t width, uint8_t height, uint8_t pressure);
