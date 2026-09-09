@@ -351,6 +351,26 @@ inline static uint32_t u2hts_get_custom_config_u32(const char* config_name,
   return result;
 }
 
+static inline void u2hts_write_unaligned_u16(void* offset, uint16_t val) {
+  memcpy(offset, &val, sizeof(val));
+}
+
+static inline void u2hts_write_unaligned_u32(void* offset, uint32_t val) {
+  memcpy(offset, &val, sizeof(val));
+}
+
+static inline uint16_t u2hts_read_unaligned_u16(void* offset) {
+  uint16_t val = 0;
+  memcpy(&val, offset, sizeof(val));
+  return val;
+}
+
+static inline uint32_t u2hts_read_unaligned_u32(void* offset) {
+  uint32_t val = 0;
+  memcpy(&val, offset, sizeof(val));
+  return val;
+}
+
 typedef struct {
   bool state;
   uint32_t delay_ms;
