@@ -89,8 +89,8 @@
 
 #ifdef U2HTS_ENABLE_FREERTOS
 #include "FreeRTOS.h"
-#include "task.h"
 #include "semphr.h"
+#include "task.h"
 
 extern SemaphoreHandle_t u2hts_log_print_mutex;
 #define _U2HTS_LOG(LOG_LEVEL, ...)                             \
@@ -155,7 +155,7 @@ extern SemaphoreHandle_t u2hts_log_print_mutex;
 #endif
 
 #if U2HTS_LOG_LEVEL >= U2HTS_LOG_LEVEL_DEBUG
-#define U2HTS_LOG_(...) _U2HTS_LOG("DEBUG", __VA_ARGS__)
+#define U2HTS_LOG_DEBUG(...) _U2HTS_LOG("DEBUG", __VA_ARGS__)
 #else
 #define U2HTS_LOG_DEBUG(...) U2HTS_UNUSED(0)
 #endif
@@ -194,9 +194,11 @@ void u2hts_set_tp_count(uint8_t tp_count);
             break;                                                     \
           }                                                            \
         }                                                              \
-        if (!*addr) return false;                                      \
+        if (!*addr) goto err_out;                                      \
       } else                                                           \
-        return false;                                                  \
+      err_out:                                                         \
+        U2HTS_LOG_ERROR("Failed to find controller after reset");      \
+      return false;                                                    \
     }                                                                  \
   } while (0)
 
@@ -319,9 +321,9 @@ U2HTS_ERROR_CODES u2hts_init(u2hts_config* cfg);
 void u2hts_task();
 uint8_t u2hts_get_max_tps();
 
-void u2hts_i2c_mem_write(uint8_t slave_addr, uint32_t mem_addr,
+bool u2hts_i2c_mem_write(uint8_t slave_addr, uint32_t mem_addr,
                          size_t mem_addr_size, void* data, size_t data_len);
-void u2hts_i2c_mem_read(uint8_t slave_addr, uint32_t mem_addr,
+bool u2hts_i2c_mem_read(uint8_t slave_addr, uint32_t mem_addr,
                         size_t mem_addr_size, void* data, size_t data_len);
 
 void u2hts_irq_handler();

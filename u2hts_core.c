@@ -84,7 +84,7 @@ inline void u2hts_led_show_error_code(U2HTS_ERROR_CODES code) {
   u2hts_delay_ms(1000);
 }
 
-void u2hts_i2c_mem_write(uint8_t slave_addr, uint32_t mem_addr,
+bool u2hts_i2c_mem_write(uint8_t slave_addr, uint32_t mem_addr,
                          size_t mem_addr_size, void* data, size_t data_len) {
   uint8_t tx_buf[mem_addr_size + data_len];
   uint32_t mem_addr_be = 0x00;
@@ -104,9 +104,10 @@ void u2hts_i2c_mem_write(uint8_t slave_addr, uint32_t mem_addr,
   bool ret = u2hts_i2c_write(slave_addr, tx_buf, sizeof(tx_buf), true);
   if (!ret)
     U2HTS_LOG_ERROR("%s error, reg = 0x%x, ret = %d", __func__, mem_addr, ret);
+  return ret;
 }
 
-void u2hts_i2c_mem_read(uint8_t slave_addr, uint32_t mem_addr,
+bool u2hts_i2c_mem_read(uint8_t slave_addr, uint32_t mem_addr,
                         size_t mem_addr_size, void* data, size_t data_len) {
   uint32_t mem_addr_be = 0x00;
   switch (mem_addr_size) {
@@ -121,13 +122,16 @@ void u2hts_i2c_mem_read(uint8_t slave_addr, uint32_t mem_addr,
       break;
   }
   bool ret = u2hts_i2c_write(slave_addr, &mem_addr_be, mem_addr_size, false);
-  if (!ret)
+  if (!ret) {
     U2HTS_LOG_ERROR("%s write error, addr = 0x%x, ret = %d", __func__, mem_addr,
                     ret);
+    return ret;
+  }
 
   ret = u2hts_i2c_read(slave_addr, data, data_len);
   if (!ret)
     U2HTS_LOG_ERROR("%s error, addr = 0x%x, ret = %d", __func__, mem_addr, ret);
+  return ret;
 }
 
 inline void u2hts_irq_handler() {
@@ -610,7 +614,8 @@ inline U2HTS_ERROR_CODES u2hts_init(u2hts_config* cfg) {
   if (!config->polling_mode) u2hts_irq_init(touch_controller->irq_type);
 
 #ifdef U2HTS_ENABLE_FREERTOS
-  u2hts_log_print_mutex = xSemaphoreCreateMutexStatic(&u2hts_log_print_mutex_buf);
+  u2hts_log_print_mutex =
+      xSemaphoreCreateMutexStatic(&u2hts_log_print_mutex_buf);
 
   u2hts_touch_task_handle = xTaskCreateStatic(
       u2hts_touch_task, "u2hts_touch_task", U2HTS_TOUCH_TASK_STACK_SIZE, NULL,
