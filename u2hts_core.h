@@ -160,7 +160,8 @@ extern SemaphoreHandle_t u2hts_log_print_mutex;
 #define U2HTS_LOG_DEBUG(...) U2HTS_UNUSED(0)
 #endif
 
-#define U2HTS_MAP_VALUE(value, min, max) (((value) * (max)) / (min))
+#define U2HTS_SCALE_VALUE(value, in_max, out_max) \
+  (((value) * (out_max)) / (in_max))
 
 #define U2HTS_SET_BIT(val, bit, set) \
   ((set) ? ((val) |= (1U << (bit))) : ((val) &= ~(1U << (bit))))
@@ -197,7 +198,7 @@ void u2hts_set_tp_count(uint8_t tp_count);
         if (!*addr) goto err_out;                                      \
       } else                                                           \
       err_out:                                                         \
-        U2HTS_LOG_ERROR("Failed to find controller after reset");      \
+        U2HTS_LOG_ERROR("Controller disappeared");                     \
       return false;                                                    \
     }                                                                  \
   } while (0)
@@ -332,7 +333,7 @@ void u2hts_set_tp(uint8_t tp_index, bool contact, uint8_t id, uint16_t x,
                   uint16_t y, uint8_t width, uint8_t height, uint8_t pressure);
 size_t u2hts_get_custom_config(const char* config_name, uint8_t* buf,
                                size_t bufsiz);
-inline static uint32_t u2hts_get_custom_config_u32(const char* config_name,
+static inline uint32_t u2hts_get_custom_config_u32(const char* config_name,
                                                    uint32_t default_value) {
   uint8_t buf[U2HTS_CUSTOM_CONFIG_STR_MAX_KEY_LENGTH] = {0};
   if (!u2hts_get_custom_config(config_name, buf, sizeof(buf)))
@@ -390,7 +391,7 @@ typedef union {
   uint16_t value;
 } u2hts_config_mask;
 
-inline static void u2hts_save_config(u2hts_config* cfg) {
+static inline void u2hts_save_config(u2hts_config* cfg) {
   u2hts_config_mask mask = {
       .magic = U2HTS_CONFIG_MAGIC,
       .x_y_swap = cfg->coord_config.x_y_swap,
@@ -401,7 +402,7 @@ inline static void u2hts_save_config(u2hts_config* cfg) {
   u2hts_write_config(mask.value);
 }
 
-inline static void u2hts_load_config(u2hts_config* cfg) {
+static inline void u2hts_load_config(u2hts_config* cfg) {
   u2hts_config_mask mask = {0};
   mask.value = u2hts_read_config();
   U2HTS_LOG_DEBUG("%s: mask.value = 0x%x", __func__, mask.value);
@@ -410,7 +411,7 @@ inline static void u2hts_load_config(u2hts_config* cfg) {
   cfg->coord_config.y_invert = mask.y_invert;
 }
 
-inline static bool u2hts_config_exists() {
+static inline bool u2hts_config_exists() {
   u2hts_config_mask mask = {0};
   mask.value = u2hts_read_config();
   U2HTS_LOG_DEBUG("%s: mask.value = 0x%x", __func__, mask.value);

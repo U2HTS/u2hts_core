@@ -28,7 +28,7 @@ static uint16_t u2hts_tp_ids_mask = 0;
 //   };
 //   uint8_t mask;
 // };
-static uint8_t u2hts_status_mask = 0x00;
+static volatile uint8_t u2hts_status_mask = 0x00;
 
 // Rotation configs: default, 90°, 180°, 270°
 // x_y_swap, x_invert 90
@@ -70,7 +70,7 @@ __weak_symbol bool u2hts_usrkey_get() { return false; }
 __weak_symbol void u2hts_write_config(uint16_t cfg) { U2HTS_UNUSED(cfg); }
 __weak_symbol uint16_t u2hts_read_config() { return U2HTS_CONFIG_MAGIC; }
 
-static inline void u2hts_led_blink(uint16_t times) {
+static void u2hts_led_blink(uint16_t times) {
   for (uint16_t i = 0; i < times; i++) {
     u2hts_led_set(true);
     u2hts_delay_ms(200);
@@ -79,7 +79,7 @@ static inline void u2hts_led_blink(uint16_t times) {
   }
 }
 
-inline void u2hts_led_show_error_code(U2HTS_ERROR_CODES code) {
+void u2hts_led_show_error_code(U2HTS_ERROR_CODES code) {
   u2hts_led_blink(code);
   u2hts_delay_ms(1000);
 }
@@ -134,7 +134,7 @@ bool u2hts_i2c_mem_read(uint8_t slave_addr, uint32_t mem_addr,
   return ret;
 }
 
-inline void u2hts_irq_handler() {
+void u2hts_irq_handler() {
   u2hts_irq_set(false);
   U2HTS_SET_IRQ_STATUS_FLAG(1);
 #ifdef U2HTS_ENABLE_FREERTOS
@@ -144,7 +144,7 @@ inline void u2hts_irq_handler() {
 #endif
 }
 
-inline void u2hts_apply_config(u2hts_config* cfg, uint8_t config_index) {
+void u2hts_apply_config(u2hts_config* cfg, uint8_t config_index) {
   union {
     struct {
       uint8_t magic;
@@ -182,11 +182,11 @@ void u2hts_set_tp(uint8_t tp_index, bool contact, uint8_t id, uint16_t x,
   u2hts_report.tp[tp_index].x =
       (x > config->coord_config.x_max)
           ? U2HTS_LOGICAL_MAX
-          : U2HTS_MAP_VALUE(x, config->coord_config.x_max, U2HTS_LOGICAL_MAX);
+          : U2HTS_SCALE_VALUE(x, config->coord_config.x_max, U2HTS_LOGICAL_MAX);
   u2hts_report.tp[tp_index].y =
       (y > config->coord_config.y_max)
           ? U2HTS_LOGICAL_MAX
-          : U2HTS_MAP_VALUE(y, config->coord_config.y_max, U2HTS_LOGICAL_MAX);
+          : U2HTS_SCALE_VALUE(y, config->coord_config.y_max, U2HTS_LOGICAL_MAX);
   if (config->coord_config.x_y_swap) {
     u2hts_report.tp[tp_index].x ^= u2hts_report.tp[tp_index].y;
     u2hts_report.tp[tp_index].y ^= u2hts_report.tp[tp_index].x;
@@ -210,7 +210,7 @@ void u2hts_set_tp(uint8_t tp_index, bool contact, uint8_t id, uint16_t x,
 #endif
 }
 
-inline static bool u2hts_get_key_timeout(uint32_t ms) {
+static inline bool u2hts_get_key_timeout(uint32_t ms) {
   if (u2hts_usrkey_get()) {
     u2hts_delay_ms(ms);
     return u2hts_usrkey_get();
@@ -218,7 +218,7 @@ inline static bool u2hts_get_key_timeout(uint32_t ms) {
     return false;
 }
 
-inline static void u2hts_handle_config() {
+static inline void u2hts_handle_config() {
   U2HTS_LOG_INFO("Enter config mode");
   u2hts_led_set(true);
   u2hts_delay_ms(500);
@@ -254,7 +254,7 @@ inline static void u2hts_handle_config() {
 #endif
 }
 
-inline static void u2hts_list_touch_controller() {
+static inline void u2hts_list_touch_controller() {
 #if U2HTS_LOG_LEVEL >= U2HTS_LOG_LEVEL_INFO
   printf("INFO: Supported controllers:");
   for (u2hts_touch_controller** tc = &__u2hts_touch_controllers_begin;
@@ -264,7 +264,7 @@ inline static void u2hts_list_touch_controller() {
 #endif
 }
 
-inline static u2hts_touch_controller* u2hts_get_touch_controller_by_name(
+static inline u2hts_touch_controller* u2hts_get_touch_controller_by_name(
     const char* name) {
   for (u2hts_touch_controller** tc = &__u2hts_touch_controllers_begin;
        tc < &__u2hts_touch_controllers_end; tc++)
@@ -272,7 +272,7 @@ inline static u2hts_touch_controller* u2hts_get_touch_controller_by_name(
   return NULL;
 }
 
-inline static u2hts_touch_controller* u2hts_get_touch_controller_by_i2c_addr(
+static u2hts_touch_controller* u2hts_get_touch_controller_by_i2c_addr(
     const uint8_t addr) {
   for (u2hts_touch_controller** tc = &__u2hts_touch_controllers_begin;
        tc < &__u2hts_touch_controllers_end; tc++) {
@@ -316,7 +316,7 @@ size_t u2hts_get_custom_config(const char* config_name, uint8_t* buf,
   return 0;
 }
 
-inline static U2HTS_ERROR_CODES u2hts_detect_touch_controller(
+static inline U2HTS_ERROR_CODES u2hts_detect_touch_controller(
     u2hts_touch_controller** tc) {
   uint8_t slave_addr = 0x00;
   U2HTS_LOG_INFO("Scanning i2c slaves...");
@@ -343,9 +343,9 @@ inline static U2HTS_ERROR_CODES u2hts_detect_touch_controller(
   return UE_OK;
 }
 
-inline uint8_t u2hts_get_max_tps() { return config->coord_config.max_tps; }
+uint8_t u2hts_get_max_tps() { return config->coord_config.max_tps; }
 
-inline static void u2hts_append_released_tps() {
+static inline void u2hts_append_released_tps() {
   if (u2hts_previous_report.tp_count == u2hts_report.tp_count) return;
 
   uint16_t new_ids_mask = 0;
@@ -363,7 +363,7 @@ inline static void u2hts_append_released_tps() {
   u2hts_tp_ids_mask = new_ids_mask;
 }
 
-inline static void u2hts_handle_touch() {
+static inline void u2hts_handle_touch() {
   U2HTS_LOG_DEBUG("Enter %s", __func__);
   U2HTS_LOG_DEBUG("u2hts_status_mask = %x", u2hts_status_mask);
   U2HTS_SET_IRQ_STATUS_FLAG(config->polling_mode);
@@ -414,7 +414,7 @@ inline static void u2hts_handle_touch() {
   }
 }
 
-inline static void u2hts_release_tps() {
+static inline void u2hts_release_tps() {
   for (uint8_t i = 0; i < u2hts_previous_report.tp_count; i++)
     u2hts_previous_report.tp[i].contact = false;
   u2hts_previous_report.scan_time = u2hts_get_timestamp();
@@ -465,7 +465,7 @@ static void u2hts_key_task(void* pvParameters) {
 #endif
 #endif
 
-inline U2HTS_ERROR_CODES u2hts_init(u2hts_config* cfg) {
+U2HTS_ERROR_CODES u2hts_init(u2hts_config* cfg) {
   U2HTS_LOG_DEBUG("Enter %s", __func__);
   U2HTS_ERROR_CODES u2hts_error = UE_OK;
   config = cfg;
@@ -634,7 +634,7 @@ inline U2HTS_ERROR_CODES u2hts_init(u2hts_config* cfg) {
   return u2hts_error;
 }
 
-inline void u2hts_task() {
+void u2hts_task() {
   if (U2HTS_GET_CONFIG_MODE_FLAG())
     u2hts_handle_config();
   else {
