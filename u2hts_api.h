@@ -42,4 +42,9 @@ uint16_t u2hts_read_config();
 // U2HTS_ENABLE_KEY
 bool u2hts_usrkey_get();
 
+// non-rtos context delay
+#ifdef U2HTS_ENABLE_FREERTOS
+void u2hts_sleep_ms(uint32_t ms);
+#endif
+
 #endif

@@ -50,7 +50,10 @@ static StaticTask_t u2hts_key_tcb = {0};
 
 static StaticTask_t u2hts_touch_tcb = {0}, u2hts_tps_release_tcb = {0};
 __weak_symbol void u2hts_delay_ms(uint32_t ms) {
-  vTaskDelay(pdMS_TO_TICKS(ms));
+  if (xTaskGetSchedulerState() == taskSCHEDULER_NOT_STARTED)
+    u2hts_sleep_ms(ms);
+  else
+    vTaskDelay(pdMS_TO_TICKS(ms));
 }
 
 __weak_symbol uint16_t u2hts_get_timestamp() {
