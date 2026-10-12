@@ -183,24 +183,20 @@ void u2hts_set_tp_count(uint8_t tp_count);
     else                                  \
       return false;                       \
   } while (0)
-
-#define U2HTS_DETECT_TOUCH_CONTROLLER(controller)                      \
-  do {                                                                 \
-    if (!u2hts_i2c_detect_slave(controller.i2c_config.primary_addr)) { \
-      if (controller.i2c_config.alt_addrs) {                           \
-        uint8_t* addr = controller.i2c_config.alt_addrs;               \
-        for (; *addr; addr++) {                                        \
-          if (u2hts_i2c_detect_slave(*addr)) {                         \
-            controller.i2c_config.primary_addr = *addr;                \
-            break;                                                     \
-          }                                                            \
-        }                                                              \
-        if (!*addr) goto err_out;                                      \
-      } else                                                           \
-      err_out:                                                         \
-        U2HTS_LOG_ERROR("Controller disappeared");                     \
-      return false;                                                    \
-    }                                                                  \
+#define U2HTS_I2C_DETECT_TOUCH_CONTROLLER(controller, i2c_addr) \
+  do {                                                          \
+    if (!u2hts_i2c_detect_slave(i2c_addr)) {                    \
+      const uint8_t* alt = controller.i2c_config.alt_addrs;     \
+      for (; alt && *alt; alt++)                                \
+        if (u2hts_i2c_detect_slave(*alt)) {                     \
+          i2c_addr = *alt;                                      \
+          break;                                                \
+        }                                                       \
+      if (!alt || !*alt) {                                      \
+        U2HTS_LOG_ERROR("Controller disappeared");              \
+        return false;                                           \
+      }                                                         \
+    }                                                           \
   } while (0)
 
 typedef enum {
@@ -213,11 +209,11 @@ typedef enum {
 } U2HTS_ERROR_CODES;
 
 typedef enum {
-  IRQ_TYPE_EDGE_FALLING = 1,
-  IRQ_TYPE_EDGE_RISING,
-  IRQ_TYPE_LEVEL_LOW,
-  IRQ_TYPE_LEVEL_HIGH
-} U2HTS_IRQ_TYPES;
+  INT_FLAG_EDGE_FALLING = 1,
+  INT_FLAG_EDGE_RISING,
+  INT_FLAG_LEVEL_LOW,
+  INT_FLAG_LEVEL_HIGH
+} U2HTS_INT_FLAGS;
 
 typedef enum {
   UB_I2C,
@@ -225,16 +221,19 @@ typedef enum {
 } U2HTS_BUS_TYPES;
 
 /*
-  Some controller constantly reporting finger coordinates, even if fingers are
-  not moving.
-  Others reports after a finger moving event triggered, usually
-  use a bit/byte to indicate the finger still presents or not.
+  CONTINOUS: controller continously reporting coords while fingers on touch panel
+  EVENT: Only fingers moving the controller will report coords
 */
 
 typedef enum {
   UTC_REPORT_MODE_CONTINOUS,
   UTC_REPORT_MODE_EVENT
 } U2HTS_TOUCH_CONTROLLER_REPORT_MODE;
+
+typedef struct {
+  U2HTS_BUS_TYPES bus_type;
+  uint8_t i2c_addr;
+} u2hts_bus_config;
 
 typedef struct __packed {
   bool contact : 1;
@@ -262,21 +261,21 @@ typedef struct {
   uint16_t x_max;
   uint16_t y_max;
   uint8_t max_tps;
-} u2hts_touch_controller_config;
+} u2hts_touch_controller_coord_config;
 
-typedef struct __packed {
+typedef struct {
   uint8_t primary_addr;
   uint8_t* alt_addrs;  // must end with 0!
   uint32_t speed_hz;
 } u2hts_i2c_config;
 
-typedef struct __packed {
+typedef struct {
   uint32_t speed_hz;
   uint8_t cpol;
   uint8_t cpha;
 } u2hts_spi_config;
 
-typedef struct __packed {
+typedef struct {
   bool x_y_swap;
   bool x_invert;
   bool y_invert;
@@ -295,30 +294,30 @@ typedef struct {
   bool override_spi_config;
   u2hts_spi_config spi_config;
   u2hts_coord_config coord_config;
-  U2HTS_IRQ_TYPES irq_type;
+  U2HTS_INT_FLAGS int_flag;
   uint32_t report_delay;
   bool polling_mode;
   const char* custom_controller_config;
 } u2hts_config;
 
 typedef struct {
-  bool (*setup)(U2HTS_BUS_TYPES bus_type);
-  void (*get_config)(u2hts_touch_controller_config* cfg);
+  bool (*setup)(u2hts_bus_config buscfg);
+  void (*get_config)(u2hts_touch_controller_coord_config* cfg);
   bool (*fetch)();
 } u2hts_touch_controller_operations;
 
 typedef struct {
   const char* name;
-  U2HTS_TOUCH_CONTROLLER_REPORT_MODE report_mode;
-  U2HTS_IRQ_TYPES irq_type;
-  u2hts_i2c_config i2c_config;
-  u2hts_spi_config spi_config;
+  const U2HTS_TOUCH_CONTROLLER_REPORT_MODE report_mode;
+  const U2HTS_INT_FLAGS int_flag;
+  const u2hts_i2c_config i2c_config;
+  const u2hts_spi_config spi_config;
   const u2hts_touch_controller_operations* operations;
 } u2hts_touch_controller;
 
 #include "u2hts_api.h"
 
-U2HTS_ERROR_CODES u2hts_init(u2hts_config* cfg);
+U2HTS_ERROR_CODES u2hts_init(const u2hts_config* cfg);
 void u2hts_task();
 uint8_t u2hts_get_max_tps();
 
@@ -327,8 +326,8 @@ bool u2hts_i2c_mem_write(uint8_t slave_addr, uint32_t mem_addr,
 bool u2hts_i2c_mem_read(uint8_t slave_addr, uint32_t mem_addr,
                         size_t mem_addr_size, void* data, size_t data_len);
 
-void u2hts_irq_handler();
-void u2hts_apply_config(u2hts_config* cfg, uint8_t config_index);
+void u2hts_int_handler();
+void u2hts_apply_config(uint8_t config_index);
 void u2hts_set_tp(uint8_t tp_index, bool contact, uint8_t id, uint16_t x,
                   uint16_t y, uint8_t width, uint8_t height, uint8_t pressure);
 size_t u2hts_get_custom_config(const char* config_name, uint8_t* buf,
@@ -390,26 +389,6 @@ typedef union {
   };
   uint16_t value;
 } u2hts_config_mask;
-
-static inline void u2hts_save_config(u2hts_config* cfg) {
-  u2hts_config_mask mask = {
-      .magic = U2HTS_CONFIG_MAGIC,
-      .x_y_swap = cfg->coord_config.x_y_swap,
-      .x_invert = cfg->coord_config.x_invert,
-      .y_invert = cfg->coord_config.y_invert,
-  };
-  U2HTS_LOG_DEBUG("%s: mask.value = 0x%x", __func__, mask.value);
-  u2hts_write_config(mask.value);
-}
-
-static inline void u2hts_load_config(u2hts_config* cfg) {
-  u2hts_config_mask mask = {0};
-  mask.value = u2hts_read_config();
-  U2HTS_LOG_DEBUG("%s: mask.value = 0x%x", __func__, mask.value);
-  cfg->coord_config.x_y_swap = mask.x_y_swap;
-  cfg->coord_config.x_invert = mask.x_invert;
-  cfg->coord_config.y_invert = mask.y_invert;
-}
 
 static inline bool u2hts_config_exists() {
   u2hts_config_mask mask = {0};

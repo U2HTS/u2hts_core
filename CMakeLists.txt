@@ -42,6 +42,10 @@ target_compile_options(u2hts_core PUBLIC
     -fno-strict-aliasing
 )
 
+target_link_libraries(u2hts_core PUBLIC
+    $<$<BOOL:${U2HTS_ENABLE_FREERTOS}>:freertos_kernel>
+)
+
 foreach(i RANGE 1 ${U2HTS_MAX_TPS})
     list(APPEND U2HTS_TPS "U2HTS_HID_REPORT_TP")
 endforeach()

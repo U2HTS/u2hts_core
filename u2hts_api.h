@@ -32,8 +32,8 @@ void u2hts_tpint_set_mode(bool mode, bool pull);
 void u2hts_tpint_set(bool value);
 bool u2hts_tpint_get();
 void u2hts_tprst_set(bool value);
-void u2hts_irq_init(U2HTS_IRQ_TYPES irq_type);
-void u2hts_irq_set(bool enable);
+void u2hts_int_init(U2HTS_INT_FLAGS int_flag);
+void u2hts_int_set(bool enable);
 // U2HTS_ENABLE_LED
 void u2hts_led_set(bool on);
 // U2HTS_ENABLE_PERSISTANT_CONFIG

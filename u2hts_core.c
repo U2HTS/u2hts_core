@@ -16,7 +16,11 @@ extern u2hts_touch_controller *__u2hts_touch_controllers_begin,
     *__u2hts_touch_controllers_end;
 
 static u2hts_touch_controller* touch_controller = NULL;
-static u2hts_config* config = NULL;
+
+const static u2hts_config* config = NULL;
+
+static u2hts_coord_config coord_config = {0};
+
 static uint16_t u2hts_last_report_ts = 0;
 __aligned(4) static u2hts_hid_report u2hts_report, u2hts_previous_report;
 static uint16_t u2hts_tp_ids_mask = 0;
@@ -61,10 +65,10 @@ __weak_symbol uint16_t u2hts_get_timestamp() {
 }
 #endif
 
-#define U2HTS_SET_IRQ_STATUS_FLAG(x) U2HTS_SET_BIT(u2hts_status_mask, 0, x)
+#define U2HTS_SET_INT_FLAG(x) U2HTS_SET_BIT(u2hts_status_mask, 0, x)
 #define U2HTS_SET_CONFIG_MODE_FLAG(x) U2HTS_SET_BIT(u2hts_status_mask, 1, x)
 #define U2HTS_SET_TPS_REMAIN_FLAG(x) U2HTS_SET_BIT(u2hts_status_mask, 2, x)
-#define U2HTS_GET_IRQ_STATUS_FLAG() U2HTS_CHECK_BIT(u2hts_status_mask, 0)
+#define U2HTS_GET_INT_FLAG() U2HTS_CHECK_BIT(u2hts_status_mask, 0)
 #define U2HTS_GET_CONFIG_MODE_FLAG() U2HTS_CHECK_BIT(u2hts_status_mask, 1)
 #define U2HTS_GET_TPS_REMAIN_FLAG() U2HTS_CHECK_BIT(u2hts_status_mask, 2)
 
@@ -137,9 +141,9 @@ bool u2hts_i2c_mem_read(uint8_t slave_addr, uint32_t mem_addr,
   return ret;
 }
 
-void u2hts_irq_handler() {
-  u2hts_irq_set(false);
-  U2HTS_SET_IRQ_STATUS_FLAG(1);
+void u2hts_int_handler() {
+  u2hts_int_set(false);
+  U2HTS_SET_INT_FLAG(1);
 #ifdef U2HTS_ENABLE_FREERTOS
   BaseType_t hptw = pdFALSE;
   vTaskNotifyGiveFromISR(u2hts_touch_task_handle, &hptw);
@@ -147,7 +151,27 @@ void u2hts_irq_handler() {
 #endif
 }
 
-void u2hts_apply_config(u2hts_config* cfg, uint8_t config_index) {
+static inline void u2hts_save_config() {
+  u2hts_config_mask mask = {
+      .magic = U2HTS_CONFIG_MAGIC,
+      .x_y_swap = coord_config.x_y_swap,
+      .x_invert = coord_config.x_invert,
+      .y_invert = coord_config.y_invert,
+  };
+  U2HTS_LOG_DEBUG("%s: mask.value = 0x%x", __func__, mask.value);
+  u2hts_write_config(mask.value);
+}
+
+static inline void u2hts_load_config() {
+  u2hts_config_mask mask = {0};
+  mask.value = u2hts_read_config();
+  U2HTS_LOG_DEBUG("%s: mask.value = 0x%x", __func__, mask.value);
+  coord_config.x_y_swap = mask.x_y_swap;
+  coord_config.x_invert = mask.x_invert;
+  coord_config.y_invert = mask.y_invert;
+}
+
+void u2hts_apply_config(uint8_t config_index) {
   union {
     struct {
       uint8_t magic;
@@ -158,15 +182,14 @@ void u2hts_apply_config(u2hts_config* cfg, uint8_t config_index) {
     uint16_t mask;
   } u2hts_config_mask;
   u2hts_config_mask.mask = u2hts_configs[config_index];
-  cfg->coord_config.x_y_swap = u2hts_config_mask.x_y_swap;
-  cfg->coord_config.x_invert = u2hts_config_mask.x_invert;
-  cfg->coord_config.y_invert = u2hts_config_mask.y_invert;
+  coord_config.x_y_swap = u2hts_config_mask.x_y_swap;
+  coord_config.x_invert = u2hts_config_mask.x_invert;
+  coord_config.y_invert = u2hts_config_mask.y_invert;
 }
 
 void u2hts_set_tp_count(uint8_t tp_count) {
-  u2hts_report.tp_count = tp_count > config->coord_config.max_tps
-                              ? config->coord_config.max_tps
-                              : tp_count;
+  u2hts_report.tp_count =
+      tp_count > coord_config.max_tps ? coord_config.max_tps : tp_count;
 }
 
 void u2hts_set_tp(uint8_t tp_index, bool contact, uint8_t id, uint16_t x,
@@ -178,27 +201,27 @@ void u2hts_set_tp(uint8_t tp_index, bool contact, uint8_t id, uint16_t x,
       "pressure = %d",
       tp_index, contact, id, x, y, width, height, pressure);
   if (tp_index >= U2HTS_MAX_TPS) return;
-  x += config->coord_config.x_offset;
-  y += config->coord_config.y_offset;
+  x += coord_config.x_offset;
+  y += coord_config.y_offset;
   u2hts_report.tp[tp_index].contact = contact;
   u2hts_report.tp[tp_index].id = id;
   u2hts_report.tp[tp_index].x =
-      (x > config->coord_config.x_max)
+      (x > coord_config.x_max)
           ? U2HTS_LOGICAL_MAX
-          : U2HTS_SCALE_VALUE(x, config->coord_config.x_max, U2HTS_LOGICAL_MAX);
+          : U2HTS_SCALE_VALUE(x, coord_config.x_max, U2HTS_LOGICAL_MAX);
   u2hts_report.tp[tp_index].y =
-      (y > config->coord_config.y_max)
+      (y > coord_config.y_max)
           ? U2HTS_LOGICAL_MAX
-          : U2HTS_SCALE_VALUE(y, config->coord_config.y_max, U2HTS_LOGICAL_MAX);
-  if (config->coord_config.x_y_swap) {
+          : U2HTS_SCALE_VALUE(y, coord_config.y_max, U2HTS_LOGICAL_MAX);
+  if (coord_config.x_y_swap) {
     u2hts_report.tp[tp_index].x ^= u2hts_report.tp[tp_index].y;
     u2hts_report.tp[tp_index].y ^= u2hts_report.tp[tp_index].x;
     u2hts_report.tp[tp_index].x ^= u2hts_report.tp[tp_index].y;
   }
-  if (config->coord_config.x_invert)
+  if (coord_config.x_invert)
     u2hts_report.tp[tp_index].x =
         U2HTS_LOGICAL_MAX - u2hts_report.tp[tp_index].x;
-  if (config->coord_config.y_invert)
+  if (coord_config.y_invert)
     u2hts_report.tp[tp_index].y =
         U2HTS_LOGICAL_MAX - u2hts_report.tp[tp_index].y;
 #ifdef U2HTS_ENABLE_COMPACT_REPORT
@@ -244,13 +267,12 @@ static inline void u2hts_handle_config() {
     }
   } while (u2hts_config_timeout < U2HTS_CONFIG_TIMEOUT);
   U2HTS_LOG_INFO("Exit config mode");
-  u2hts_apply_config(config, config_index);
+  u2hts_apply_config(config_index);
   U2HTS_LOG_DEBUG(
       "Applyed config : x_y_swap = %d, x_invert = %d, y_invert = %d",
-      config->coord_config.x_y_swap, config->coord_config.x_invert,
-      config->coord_config.y_invert);
+      coord_config.x_y_swap, coord_config.x_invert, coord_config.y_invert);
   U2HTS_LOG_INFO("Saving config");
-  u2hts_save_config(config);
+  u2hts_save_config();
   U2HTS_SET_CONFIG_MODE_FLAG(0);
 #ifdef U2HTS_ENABLE_FREERTOS
   vTaskResume(u2hts_touch_task_handle);
@@ -319,7 +341,7 @@ size_t u2hts_get_custom_config(const char* config_name, uint8_t* buf,
   return 0;
 }
 
-static inline U2HTS_ERROR_CODES u2hts_detect_touch_controller(
+static inline U2HTS_ERROR_CODES u2hts_i2c_detect_touch_controller(
     u2hts_touch_controller** tc) {
   uint8_t slave_addr = 0x00;
   U2HTS_LOG_INFO("Scanning i2c slaves...");
@@ -346,7 +368,7 @@ static inline U2HTS_ERROR_CODES u2hts_detect_touch_controller(
   return UE_OK;
 }
 
-uint8_t u2hts_get_max_tps() { return config->coord_config.max_tps; }
+uint8_t u2hts_get_max_tps() { return coord_config.max_tps; }
 
 static inline void u2hts_append_released_tps() {
   if (u2hts_previous_report.tp_count == u2hts_report.tp_count) return;
@@ -369,7 +391,7 @@ static inline void u2hts_append_released_tps() {
 static inline void u2hts_handle_touch() {
   U2HTS_LOG_DEBUG("Enter %s", __func__);
   U2HTS_LOG_DEBUG("u2hts_status_mask = %x", u2hts_status_mask);
-  U2HTS_SET_IRQ_STATUS_FLAG(config->polling_mode);
+  U2HTS_SET_INT_FLAG(config->polling_mode);
   memset(&u2hts_report, 0x00, sizeof(u2hts_hid_report));
   // for (uint8_t i = 0; i < U2HTS_MAX_TPS; i++) u2hts_report.tp[i].id = 0x7F;
   if (!touch_controller->operations->fetch()) {
@@ -436,9 +458,9 @@ static void u2hts_touch_task(void* pvParameters) {
       u2hts_delay_ms(1);  // yield for other tasks
     } else {
       ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(10));
-      if (U2HTS_GET_IRQ_STATUS_FLAG() && u2hts_get_usb_status())
+      if (U2HTS_GET_INT_FLAG() && u2hts_get_usb_status())
         u2hts_handle_touch();
-      u2hts_irq_set(!config->polling_mode && u2hts_get_usb_status());
+      u2hts_int_set(!config->polling_mode && u2hts_get_usb_status());
     }
     u2hts_led_set(!u2hts_get_usb_status());
   }
@@ -468,10 +490,11 @@ static void u2hts_key_task(void* pvParameters) {
 #endif
 #endif
 
-U2HTS_ERROR_CODES u2hts_init(u2hts_config* cfg) {
+U2HTS_ERROR_CODES u2hts_init(const u2hts_config* cfg) {
   U2HTS_LOG_DEBUG("Enter %s", __func__);
   U2HTS_ERROR_CODES u2hts_error = UE_OK;
   config = cfg;
+  coord_config = config->coord_config;
   U2HTS_LOG_INFO("U2HTS " U2HTS_GIT_SHA " built @ %s %s with feature%s",
                  __DATE__, __TIME__,
                  ""
@@ -493,9 +516,9 @@ U2HTS_ERROR_CODES u2hts_init(u2hts_config* cfg) {
   U2HTS_LOG_DEBUG("This is a DEBUG build and expect low report rate!");
 
   if (u2hts_config_exists())
-    u2hts_load_config(config);
+    u2hts_load_config();
   else
-    u2hts_save_config(config);
+    u2hts_save_config();
 
   if (config->bus_type != UB_I2C && !strcmp(config->controller, "auto")) {
     U2HTS_LOG_ERROR("Bus type %d does not support controller detection",
@@ -520,7 +543,7 @@ U2HTS_ERROR_CODES u2hts_init(u2hts_config* cfg) {
       U2HTS_LOG_INFO("Found controller %s @ addr 0x%x", touch_controller->name,
                      config->i2c_config.primary_addr);
     } else
-      u2hts_error = u2hts_detect_touch_controller(&touch_controller);
+      u2hts_error = u2hts_i2c_detect_touch_controller(&touch_controller);
   } else {
     U2HTS_LOG_INFO("Controller: %s", cfg->controller);
     touch_controller = u2hts_get_touch_controller_by_name(cfg->controller);
@@ -544,57 +567,57 @@ U2HTS_ERROR_CODES u2hts_init(u2hts_config* cfg) {
     return UE_NCOMPAT;
   }
 
-  if (config->override_i2c_config)
-    touch_controller->i2c_config = config->i2c_config;
-
-  if (config->override_spi_config)
-    touch_controller->spi_config = config->spi_config;
-
-  touch_controller->irq_type =
-      (config->irq_type) ? config->irq_type : touch_controller->irq_type;
+  u2hts_i2c_config i2c_config = (config->override_i2c_config)
+                                    ? config->i2c_config
+                                    : touch_controller->i2c_config;
+  u2hts_spi_config spi_config = (config->override_spi_config)
+                                    ? config->spi_config
+                                    : touch_controller->spi_config;
+  U2HTS_INT_FLAGS int_flag =
+      (config->int_flag) ? config->int_flag : touch_controller->int_flag;
 
   switch (config->bus_type) {
     case UB_I2C:
-      u2hts_i2c_set_speed(touch_controller->i2c_config.speed_hz);
+      u2hts_i2c_set_speed(i2c_config.speed_hz);
       break;
     case UB_SPI:
-      u2hts_spi_init(&touch_controller->spi_config);
+      u2hts_spi_init(&spi_config);
       break;
   }
 
   // setup controller
-  if (!touch_controller->operations->setup(config->bus_type)) {
+  if (!touch_controller->operations->setup((u2hts_bus_config){
+          config->bus_type, .i2c_addr = i2c_config.primary_addr})) {
     U2HTS_LOG_ERROR("Failed to setup controller: %s", touch_controller->name);
     return UE_FSETUP;
   }
 
-  u2hts_touch_controller_config tc_config = {0};
+  u2hts_touch_controller_coord_config tc_coord_cfg = {0};
 
-  if (config->coord_config.x_max && config->coord_config.y_max &&
-      config->coord_config.max_tps) {
-    if (config->coord_config.x_max > U2HTS_LOGICAL_MAX ||
-        config->coord_config.y_max > U2HTS_LOGICAL_MAX ||
-        config->coord_config.max_tps > U2HTS_MAX_TPS) {
+  if (coord_config.x_max && coord_config.y_max && coord_config.max_tps) {
+    if (coord_config.x_max > U2HTS_LOGICAL_MAX ||
+        coord_config.y_max > U2HTS_LOGICAL_MAX ||
+        coord_config.max_tps > U2HTS_MAX_TPS) {
       U2HTS_LOG_ERROR("Config values out of range");
       return UE_INCFG;
     }
   } else {
     if (touch_controller->operations->get_config) {
-      touch_controller->operations->get_config(&tc_config);
+      touch_controller->operations->get_config(&tc_coord_cfg);
       U2HTS_LOG_INFO(
           "Controller built-in config: max_tps = %d, x_max = %d, y_max = "
           "%d",
-          tc_config.max_tps, tc_config.x_max, tc_config.y_max);
-      if (!tc_config.x_max || !tc_config.y_max || !tc_config.max_tps ||
-          tc_config.max_tps > U2HTS_MAX_TPS ||
-          tc_config.x_max > U2HTS_LOGICAL_MAX ||
-          tc_config.y_max > U2HTS_LOGICAL_MAX) {
+          tc_coord_cfg.max_tps, tc_coord_cfg.x_max, tc_coord_cfg.y_max);
+      if (!tc_coord_cfg.x_max || !tc_coord_cfg.y_max || !tc_coord_cfg.max_tps ||
+          tc_coord_cfg.max_tps > U2HTS_MAX_TPS ||
+          tc_coord_cfg.x_max > U2HTS_LOGICAL_MAX ||
+          tc_coord_cfg.y_max > U2HTS_LOGICAL_MAX) {
         U2HTS_LOG_ERROR("Config values out of range");
         return UE_INCFG;
       } else {
-        config->coord_config.x_max = tc_config.x_max;
-        config->coord_config.y_max = tc_config.y_max;
-        config->coord_config.max_tps = tc_config.max_tps;
+        coord_config.x_max = tc_coord_cfg.x_max;
+        coord_config.y_max = tc_coord_cfg.y_max;
+        coord_config.max_tps = tc_coord_cfg.max_tps;
       }
     } else {
       U2HTS_LOG_ERROR(
@@ -608,13 +631,11 @@ U2HTS_ERROR_CODES u2hts_init(u2hts_config* cfg) {
       "U2HTS config: x_max = %d, y_max = %d, max_tps = %d, x_offset = %d, "
       "y_offset = %d, x_y_swap = %d, "
       "x_invert = %d, y_invert = %d, polling_mode = %d",
-      config->coord_config.x_max, config->coord_config.y_max,
-      config->coord_config.max_tps, config->coord_config.x_offset,
-      config->coord_config.y_offset, config->coord_config.x_y_swap,
-      config->coord_config.x_invert, config->coord_config.y_invert,
-      config->polling_mode);
+      coord_config.x_max, coord_config.y_max, coord_config.max_tps,
+      coord_config.x_offset, coord_config.y_offset, coord_config.x_y_swap,
+      coord_config.x_invert, coord_config.y_invert, config->polling_mode);
   u2hts_usb_init();
-  if (!config->polling_mode) u2hts_irq_init(touch_controller->irq_type);
+  if (!config->polling_mode) u2hts_int_init(int_flag);
 
 #ifdef U2HTS_ENABLE_FREERTOS
   u2hts_log_print_mutex =
@@ -653,11 +674,11 @@ void u2hts_task() {
         }
       }
 
-      u2hts_irq_set(!config->polling_mode && u2hts_get_usb_status());
+      u2hts_int_set(!config->polling_mode && u2hts_get_usb_status());
 
       u2hts_led_set(!u2hts_get_usb_status());
 
-      if ((config->polling_mode ? true : U2HTS_GET_IRQ_STATUS_FLAG()) &&
+      if ((config->polling_mode ? true : U2HTS_GET_INT_FLAG()) &&
           u2hts_get_usb_status())
         u2hts_handle_touch();
     }
