@@ -7,6 +7,7 @@
 #ifndef _U2HTS_CORE_H_
 #define _U2HTS_CORE_H_
 
+#include <stdarg.h>  // va_args
 #include <stdbool.h>
 #include <stdint.h>  // uint
 #include <stdio.h>   // printf
@@ -93,16 +94,6 @@
 #include "task.h"
 
 extern SemaphoreHandle_t u2hts_log_print_mutex;
-#define _U2HTS_LOG(LOG_LEVEL, ...)                             \
-  do {                                                         \
-    if (xTaskGetSchedulerState() != taskSCHEDULER_NOT_STARTED) \
-      xSemaphoreTake(u2hts_log_print_mutex, portMAX_DELAY);    \
-    printf(LOG_LEVEL ": ");                                    \
-    printf(__VA_ARGS__);                                       \
-    printf("\n");                                              \
-    if (xTaskGetSchedulerState() != taskSCHEDULER_NOT_STARTED) \
-      xSemaphoreGive(u2hts_log_print_mutex);                   \
-  } while (0)
 
 #ifndef U2HTS_TOUCH_TASK_STACK_SIZE
 #define U2HTS_TOUCH_TASK_STACK_SIZE 512
@@ -127,37 +118,45 @@ extern SemaphoreHandle_t u2hts_log_print_mutex;
 #ifndef U2HTS_KEY_TASK_PRIORITY
 #define U2HTS_KEY_TASK_PRIORITY tskIDLE_PRIORITY + 1
 #endif
-#else
-#define _U2HTS_LOG(LOG_LEVEL, ...) \
-  do {                             \
-    printf(LOG_LEVEL ": ");        \
-    printf(__VA_ARGS__);           \
-    printf("\n");                  \
-  } while (0)
 #endif
 
+void _u2hts_log(uint8_t level, const char* tag, const char* format, ...)
+    __printflike(3, 4);
+
 #if U2HTS_LOG_LEVEL >= U2HTS_LOG_LEVEL_ERROR
-#define U2HTS_LOG_ERROR(...) _U2HTS_LOG("ERROR", __VA_ARGS__)
+#define ULOGE(TAG, ...)                                    \
+  do {                                                     \
+    _u2hts_log(U2HTS_LOG_LEVEL_ERROR, TAG, ##__VA_ARGS__); \
+  } while (0)
 #else
-#define U2HTS_LOG_ERROR(...) U2HTS_UNUSED(0)
+#define ULOGE(...) U2HTS_UNUSED(0)
 #endif
 
 #if U2HTS_LOG_LEVEL >= U2HTS_LOG_LEVEL_WARN
-#define U2HTS_LOG_WARN(...) _U2HTS_LOG("WARN", __VA_ARGS__)
+#define ULOGW(TAG, ...)                                   \
+  do {                                                    \
+    _u2hts_log(U2HTS_LOG_LEVEL_WARN, TAG, ##__VA_ARGS__); \
+  } while (0)
 #else
-#define U2HTS_LOG_WARN(...) U2HTS_UNUSED(0)
+#define ULOGW(...) U2HTS_UNUSED(0)
 #endif
 
 #if U2HTS_LOG_LEVEL >= U2HTS_LOG_LEVEL_INFO
-#define U2HTS_LOG_INFO(...) _U2HTS_LOG("INFO", __VA_ARGS__)
+#define ULOGI(TAG, ...)                                   \
+  do {                                                    \
+    _u2hts_log(U2HTS_LOG_LEVEL_INFO, TAG, ##__VA_ARGS__); \
+  } while (0)
 #else
-#define U2HTS_LOG_INFO(...) U2HTS_UNUSED(0)
+#define ULOGI(...) U2HTS_UNUSED(0)
 #endif
 
 #if U2HTS_LOG_LEVEL >= U2HTS_LOG_LEVEL_DEBUG
-#define U2HTS_LOG_DEBUG(...) _U2HTS_LOG("DEBUG", __VA_ARGS__)
+#define ULOGD(TAG, ...)                                    \
+  do {                                                     \
+    _u2hts_log(U2HTS_LOG_LEVEL_DEBUG, TAG, ##__VA_ARGS__); \
+  } while (0)
 #else
-#define U2HTS_LOG_DEBUG(...) U2HTS_UNUSED(0)
+#define ULOGD(...) U2HTS_UNUSED(0)
 #endif
 
 #define U2HTS_SCALE_VALUE(value, in_max, out_max) \
@@ -176,6 +175,7 @@ extern SemaphoreHandle_t u2hts_log_print_mutex;
       u2hts_touch_controller_##controller = &controller
 
 void u2hts_set_tp_count(uint8_t tp_count);
+
 #define U2HTS_SET_TP_COUNT_SAFE(TP_COUNT) \
   do {                                    \
     if (TP_COUNT)                         \
@@ -183,6 +183,7 @@ void u2hts_set_tp_count(uint8_t tp_count);
     else                                  \
       return false;                       \
   } while (0)
+
 #define U2HTS_I2C_DETECT_TOUCH_CONTROLLER(controller, i2c_addr) \
   do {                                                          \
     if (!u2hts_i2c_detect_slave(i2c_addr)) {                    \
@@ -193,7 +194,7 @@ void u2hts_set_tp_count(uint8_t tp_count);
           break;                                                \
         }                                                       \
       if (!alt || !*alt) {                                      \
-        U2HTS_LOG_ERROR("Controller disappeared");              \
+        ULOGE(controller.name, "Controller disappeared");       \
         return false;                                           \
       }                                                         \
     }                                                           \
@@ -221,7 +222,7 @@ typedef enum {
 } U2HTS_BUS_TYPES;
 
 /*
-  CONTINOUS: controller continously reporting coords while fingers on touch panel
+  CONTINOUS: continously reporting coords while fingers on touch panel
   EVENT: Only fingers moving the controller will report coords
 */
 
@@ -389,12 +390,5 @@ typedef union {
   };
   uint16_t value;
 } u2hts_config_mask;
-
-static inline bool u2hts_config_exists() {
-  u2hts_config_mask mask = {0};
-  mask.value = u2hts_read_config();
-  U2HTS_LOG_DEBUG("%s: mask.value = 0x%x", __func__, mask.value);
-  return (mask.magic == U2HTS_CONFIG_MAGIC);
-}
 
 #endif
