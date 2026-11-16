@@ -5,6 +5,124 @@
 #define U2HTS_HID_REPORT_TP_MAX_COUNT_ID 2
 #define U2HTS_HID_REPORT_TP_MS_THQA_CERT_ID 3
 
+#ifdef CFG_TUSB_MCU
+// clang-format off
+#include "tusb.h"
+
+#define U2HTS_PHYSICAL_MAX_X 4095
+#define U2HTS_PHYSICAL_MAX_Y 4095
+
+#define HID_USAGE_DIGITIZER_TOUCH_SCREEN 0x04
+#define HID_USAGE_TS_FINGER 0x22
+#define HID_USAGE_TS_TIP 0x42
+#define HID_USAGE_TS_CONTACT_IDENTIFIER 0x51
+#define HID_USAGE_TS_WIDTH 0x48
+#define HID_USAGE_TS_HEIGHT 0x49
+#define HID_USAGE_TS_PRESSURE 0x30
+#define HID_USAGE_TS_SCAN_TIME 0x56
+#define HID_USAGE_TS_CONTACT_COUNT 0x54
+#define HID_USAGE_TS_CONTACT_COUNT_MAX 0x55
+
+#define HID_USAGE_MS_THQA_CERT 0xc5
+
+#ifdef U2HTS_ENABLE_COMPACT_REPORT
+#define U2HTS_HID_REPORT_TP \
+      HID_USAGE(HID_USAGE_TS_FINGER), \
+      HID_COLLECTION(HID_COLLECTION_LOGICAL), \
+      HID_USAGE(HID_USAGE_TS_TIP), \
+      HID_LOGICAL_MAX(1), \
+      HID_REPORT_SIZE(1), \
+      HID_REPORT_COUNT(1), \
+        HID_INPUT(HID_DATA | HID_VARIABLE | HID_ABSOLUTE), \
+      HID_USAGE(HID_USAGE_TS_CONTACT_IDENTIFIER), \
+      HID_REPORT_SIZE(7), \
+        HID_INPUT(HID_DATA | HID_VARIABLE | HID_ABSOLUTE), \
+      HID_USAGE_PAGE(HID_USAGE_PAGE_DESKTOP), \
+      HID_LOGICAL_MAX_N(U2HTS_LOGICAL_MAX, 2), \
+      HID_REPORT_SIZE(12), \
+      HID_USAGE(HID_USAGE_DESKTOP_X), \
+      HID_PHYSICAL_MAX_N(U2HTS_PHYSICAL_MAX_X, 2), \
+        HID_INPUT(HID_DATA | HID_VARIABLE | HID_ABSOLUTE), \
+      HID_PHYSICAL_MAX_N(U2HTS_PHYSICAL_MAX_Y, 2), \
+      HID_USAGE(HID_USAGE_DESKTOP_Y), \
+        HID_INPUT(HID_DATA | HID_VARIABLE | HID_ABSOLUTE), \
+      HID_USAGE_PAGE(HID_USAGE_PAGE_DIGITIZER), \
+      HID_COLLECTION_END
+#else
+#define U2HTS_HID_REPORT_TP \
+      HID_USAGE(HID_USAGE_TS_FINGER), \
+      HID_COLLECTION(HID_COLLECTION_LOGICAL), \
+      HID_USAGE(HID_USAGE_TS_TIP), \
+      HID_LOGICAL_MAX(1), \
+      HID_REPORT_SIZE(1), \
+      HID_REPORT_COUNT(1), \
+        HID_INPUT(HID_DATA | HID_VARIABLE | HID_ABSOLUTE), \
+      HID_USAGE(HID_USAGE_TS_CONTACT_IDENTIFIER), \
+      HID_LOGICAL_MAX(0x7F), \
+      HID_REPORT_SIZE(7), \
+        HID_INPUT(HID_DATA | HID_VARIABLE | HID_ABSOLUTE), \
+      HID_USAGE_PAGE(HID_USAGE_PAGE_DESKTOP), \
+      HID_LOGICAL_MAX_N(U2HTS_LOGICAL_MAX, 2), \
+      HID_REPORT_SIZE(16), \
+      HID_USAGE(HID_USAGE_DESKTOP_X), \
+      HID_PHYSICAL_MAX_N(U2HTS_PHYSICAL_MAX_X, 2), \
+        HID_INPUT(HID_DATA | HID_VARIABLE | HID_ABSOLUTE), \
+      HID_PHYSICAL_MAX_N(U2HTS_PHYSICAL_MAX_Y, 2), \
+      HID_USAGE(HID_USAGE_DESKTOP_Y), \
+        HID_INPUT(HID_DATA | HID_VARIABLE | HID_ABSOLUTE), \
+      HID_USAGE_PAGE(HID_USAGE_PAGE_DIGITIZER), \
+      HID_LOGICAL_MAX_N(255, 2), \
+      HID_PHYSICAL_MAX_N(255, 2), \
+      HID_REPORT_SIZE(8), \
+      HID_REPORT_COUNT(3), \
+      HID_USAGE(HID_USAGE_TS_WIDTH), \
+      HID_USAGE(HID_USAGE_TS_HEIGHT), \
+      HID_USAGE(HID_USAGE_TS_PRESSURE), \
+        HID_INPUT(HID_DATA | HID_VARIABLE | HID_ABSOLUTE), \
+      HID_COLLECTION_END
+#endif
+
+#define U2HTS_HID_REPORT_TP_DESC(id) \
+      HID_USAGE_PAGE(HID_USAGE_PAGE_DIGITIZER), \
+        HID_USAGE(HID_USAGE_DIGITIZER_TOUCH_SCREEN), \
+        HID_COLLECTION(HID_COLLECTION_APPLICATION), \
+        HID_REPORT_ID(id) \
+          0x34, /* HID_PHYSICAL_MIN(0) */ \
+          0x14, /* HID_PHYSICAL_MIN(0) */ \
+          HID_UNIT_EXPONENT(0x0e), \
+          HID_UNIT(0x11) \
+
+#define U2HTS_HID_REPORT_TP_INFO \
+      HID_LOGICAL_MAX_N(0xFFFF, 3), \
+      HID_REPORT_SIZE(16), \
+      HID_UNIT_EXPONENT(0x0C), \
+      HID_UNIT_N(0x1001, 2), \
+      HID_REPORT_COUNT(1), \
+      HID_USAGE(HID_USAGE_TS_SCAN_TIME), \
+      HID_PHYSICAL_MAX_N(0xFFFF, 3), \
+        HID_INPUT(HID_DATA | HID_VARIABLE | HID_ABSOLUTE), \
+      HID_USAGE(HID_USAGE_TS_CONTACT_COUNT), \
+      HID_LOGICAL_MAX(U2HTS_MAX_TPS), \
+      HID_REPORT_SIZE(8), \
+        HID_INPUT(HID_DATA | HID_VARIABLE | HID_ABSOLUTE)
+
+#define U2HTS_HID_REPORT_TP_MAX_COUNT_DESC(id) \
+      HID_REPORT_ID(id) \
+      HID_USAGE(HID_USAGE_TS_CONTACT_COUNT_MAX), \
+        HID_FEATURE(HID_DATA | HID_VARIABLE | HID_ABSOLUTE)
+
+#define U2HTS_HID_REPORT_TP_MS_THQA_CERT_DESC(id) \
+      HID_REPORT_ID(id) \
+      HID_USAGE_PAGE_N(HID_USAGE_PAGE_VENDOR, 2), \
+      HID_USAGE(HID_USAGE_MS_THQA_CERT), \
+      HID_LOGICAL_MAX_N(255, 2), \
+      HID_REPORT_COUNT_N(256, 2), \
+        HID_FEATURE(HID_DATA | HID_VARIABLE | HID_ABSOLUTE)
+
+#define U2HTS_HID_REPORT_DESCRIPTOR_END HID_COLLECTION_END
+// clang-format on
+#else
+
 #ifdef U2HTS_ENABLE_COMPACT_REPORT
 #define U2HTS_HID_REPORT_TP                                                                                            \
   0x09, 0x22,           /* (LOCAL)  USAGE              Touch Point */                                                  \
@@ -38,6 +156,7 @@
       0x95, 0x01,       /* (GLOBAL) REPORT_COUNT       1 */                                                            \
       0x81, 0x02,       /* (MAIN)   INPUT              (Data, Variable, Absolute) */                                   \
       0x09, 0x51,       /* (LOCAL)  USAGE              Contact Identifier */                                           \
+      0x25, 0x7F,       /* (GLOBAL) LOGICAL_MAXIMUM    127 */                                                          \
       0x75, 0x07,       /* (GLOBAL) REPORT_SIZE        7 bits */                                                       \
       0x81, 0x02,       /* (MAIN)   INPUT              (Data, Variable, Absolute) */                                   \
       0x05, 0x01,       /* (GLOBAL) USAGE_PAGE         Generic Desktop */                                              \
@@ -61,29 +180,29 @@
       0xC0              /* (MAIN)   END_COLLECTION */
 #endif
 
-#define U2HTS_HID_REPORT_DESCRIPTOR_START                                                                              \
-  0x05, 0x0D,                       /* (GLOBAL) USAGE_PAGE         Digitizers */                                       \
-      0x09, 0x04,                   /* (LOCAL)  USAGE              Touch Screen */                                     \
-      0xA1, 0x01,                   /* (MAIN)   COLLECTION         Application */                                      \
-      0x85, U2HTS_HID_REPORT_TP_ID, /* (GLOBAL) REPORT_ID */                                                           \
-      0x09, 0x22,                   /* (LOCAL)  USAGE              Touch Point */                                      \
-      0x34,                         /* (GLOBAL) PHYSICAL_MINIMUM   0 */                                                \
-      0x14,                         /* (GLOBAL) LOGICAL_MINIMUM    0 */                                                \
-      0x55, 0x0E,                   /* (GLOBAL) UNIT_EXPONENT      -2 */                                               \
-      0x65, 0x11                    /* (GLOBAL) UNIT               SI Linear (Centimeter) */
+#define U2HTS_HID_REPORT_TP_DESC(x)                                                                                    \
+  0x05, 0x0D,     /* (GLOBAL) USAGE_PAGE         Digitizers */                                                         \
+      0x09, 0x04, /* (LOCAL)  USAGE              Touch Screen */                                                       \
+      0xA1, 0x01, /* (MAIN)   COLLECTION         Application */                                                        \
+      0x85, x,    /* (GLOBAL) REPORT_ID */                                                                             \
+      0x34,       /* (GLOBAL) PHYSICAL_MINIMUM   0 */                                                                  \
+      0x14,       /* (GLOBAL) LOGICAL_MINIMUM    0 */                                                                  \
+      0x55, 0x0E, /* (GLOBAL) UNIT_EXPONENT      -2 */                                                                 \
+      0x65, 0x11  /* (GLOBAL) UNIT               SI Linear (Centimeter) */
 
 #define U2HTS_HID_REPORT_TP_INFO                                                                                       \
-  0x27, 0xFF, 0xFF, 0x00, 0x00, /* (GLOBAL) LOGICAL_MAXIMUM    65535 */                                                \
-      0x75, 0x10,               /* (GLOBAL) REPORT_SIZE        16 bits */                                              \
-      0x55, 0x0C,               /* (GLOBAL) UNIT_EXPONENT      -4 */                                                   \
-      0x66, 0x01, 0x10,         /* (GLOBAL) UNIT               SI Linear (Seconds) */                                  \
-      0x95, 0x01,               /* (GLOBAL) REPORT_COUNT       1 */                                                    \
-      0x09, 0x56,               /* (LOCAL)  USAGE              Scan Time */                                            \
-      0x81, 0x02,               /* (MAIN)   INPUT              (Data, Variable, Absolute) */                           \
-      0x09, 0x54,               /* (LOCAL)  USAGE              Contact Count */                                        \
-      0x25, U2HTS_MAX_TPS,      /* (GLOBAL) LOGICAL_MAXIMUM */                                                         \
-      0x75, 0x08,               /* (GLOBAL) REPORT_SIZE        8 bits */                                               \
-      0x81, 0x02                /* (MAIN)   INPUT              (Data, Variable, Absolute) */
+  0x27, 0xFF, 0xFF, 0x00, 0x00,     /* (GLOBAL) LOGICAL_MAXIMUM    65535 */                                            \
+      0x47, 0xFF, 0xFF, 0x00, 0x00, /* (GLOBAL) PHYSICAL_MAXIMUM   65535 */                                            \
+      0x75, 0x10,                   /* (GLOBAL) REPORT_SIZE        16 bits */                                          \
+      0x55, 0x0C,                   /* (GLOBAL) UNIT_EXPONENT      -4 */                                               \
+      0x66, 0x01, 0x10,             /* (GLOBAL) UNIT               SI Linear (Seconds) */                              \
+      0x95, 0x01,                   /* (GLOBAL) REPORT_COUNT       1 */                                                \
+      0x09, 0x56,                   /* (LOCAL)  USAGE              Scan Time */                                        \
+      0x81, 0x02,                   /* (MAIN)   INPUT              (Data, Variable, Absolute) */                       \
+      0x09, 0x54,                   /* (LOCAL)  USAGE              Contact Count */                                    \
+      0x25, U2HTS_MAX_TPS,          /* (GLOBAL) LOGICAL_MAXIMUM */                                                     \
+      0x75, 0x08,                   /* (GLOBAL) REPORT_SIZE        8 bits */                                           \
+      0x81, 0x02                    /* (MAIN)   INPUT              (Data, Variable, Absolute) */
 
 #define U2HTS_HID_REPORT_TP_MAX_COUNT_DESC(x)                                                                          \
   0x85, x,        /* (GLOBAL) REPORT_ID */                                                                             \
@@ -99,7 +218,7 @@
       0xB1, 0x02        /* (MAIN)   FEATURE            (Data, Variable, Absolute) */
 
 #define U2HTS_HID_REPORT_DESCRIPTOR_END 0xC0 /* (MAIN)   END_COLLECTION */
-
+#endif
 // https://learn.microsoft.com/en-us/windows-hardware/design/component-guidelines/touchscreen-required-hid-top-level-collections
 // "Device Certification Status Feature Report" section
 
@@ -125,23 +244,23 @@
 // clang-format off
 #ifndef U2HTS_HID_REPORT_DESCRIPTOR
 // 10 TPs
-#define U2HTS_HID_REPORT_DESCRIPTOR                                                                                    \
-  U2HTS_HID_REPORT_DESCRIPTOR_START,                                                                                   \
-      U2HTS_HID_REPORT_TP,                                /* Touch Point 1  */                                         \
-      U2HTS_HID_REPORT_TP,                                /* Touch Point 2  */                                         \
-      U2HTS_HID_REPORT_TP,                                /* Touch Point 3  */                                         \
-      U2HTS_HID_REPORT_TP,                                /* Touch Point 4  */                                         \
-      U2HTS_HID_REPORT_TP,                                /* Touch Point 5  */                                         \
-      U2HTS_HID_REPORT_TP,                                /* Touch Point 6  */                                         \
-      U2HTS_HID_REPORT_TP,                                /* Touch Point 7  */                                         \
-      U2HTS_HID_REPORT_TP,                                /* Touch Point 8  */                                         \
-      U2HTS_HID_REPORT_TP,                                /* Touch Point 9  */                                         \
-      U2HTS_HID_REPORT_TP,                                /* Touch Point 10 */                                         \
-      U2HTS_HID_REPORT_TP_INFO,                                                                                        \
-      U2HTS_HID_REPORT_TP_MAX_COUNT_DESC(U2HTS_HID_REPORT_TP_MAX_COUNT_ID),                                            \
-      U2HTS_HID_REPORT_TP_MS_THQA_CERT_DESC(U2HTS_HID_REPORT_TP_MS_THQA_CERT_ID),                                      \
-      U2HTS_HID_REPORT_DESCRIPTOR_END
+#define U2HTS_HID_REPORT_DESCRIPTOR                                             \
+  U2HTS_HID_REPORT_TP_DESC(U2HTS_HID_REPORT_TP_ID),                             \
+    U2HTS_HID_REPORT_TP,                                /* Touch Point 1  */    \
+    U2HTS_HID_REPORT_TP,                                /* Touch Point 2  */    \
+    U2HTS_HID_REPORT_TP,                                /* Touch Point 3  */    \
+    U2HTS_HID_REPORT_TP,                                /* Touch Point 4  */    \
+    U2HTS_HID_REPORT_TP,                                /* Touch Point 5  */    \
+    U2HTS_HID_REPORT_TP,                                /* Touch Point 6  */    \
+    U2HTS_HID_REPORT_TP,                                /* Touch Point 7  */    \
+    U2HTS_HID_REPORT_TP,                                /* Touch Point 8  */    \
+    U2HTS_HID_REPORT_TP,                                /* Touch Point 9  */    \
+    U2HTS_HID_REPORT_TP,                                /* Touch Point 10 */    \
+    U2HTS_HID_REPORT_TP_INFO,                                                   \
+    U2HTS_HID_REPORT_TP_MAX_COUNT_DESC(U2HTS_HID_REPORT_TP_MAX_COUNT_ID),       \
+    U2HTS_HID_REPORT_TP_MS_THQA_CERT_DESC(U2HTS_HID_REPORT_TP_MS_THQA_CERT_ID), \
+  U2HTS_HID_REPORT_DESCRIPTOR_END
 
-// clang-format on
+// clang-format ons
 #endif
 #endif
