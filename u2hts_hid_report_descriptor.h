@@ -5,6 +5,8 @@
 #define U2HTS_HID_REPORT_TP_MAX_COUNT_ID 2
 #define U2HTS_HID_REPORT_TP_MS_THQA_CERT_ID 3
 
+#define U2HTS_LOGICAL_MAX 4095
+
 #ifdef CFG_TUSB_MCU
 // clang-format off
 #include "tusb.h"

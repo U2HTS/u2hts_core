@@ -13,6 +13,8 @@
 #include <stdio.h>   // printf
 #include <string.h>  // memcpy
 
+#include "u2hts_hid_report_descriptor.h" // U2HTS_LOGICAL_MAX
+
 #define U2HTS_LOG_LEVEL_ERROR 0
 #define U2HTS_LOG_LEVEL_WARN 1
 #define U2HTS_LOG_LEVEL_INFO 2
@@ -34,7 +36,6 @@
 #define U2HTS_DEFAULT_TP_WIDTH 0x30
 #define U2HTS_DEFAULT_TP_HEIGHT 0x30
 #define U2HTS_DEFAULT_TP_PRESSURE 0x30
-#define U2HTS_LOGICAL_MAX 4095
 
 #define U2HTS_CONFIG_ROTATION_0 0
 #define U2HTS_CONFIG_ROTATION_90 1
@@ -120,6 +121,11 @@ extern SemaphoreHandle_t u2hts_log_print_mutex;
 #endif
 #endif
 
+#ifndef __printflike
+#define	__printflike(fmtarg, firstvararg) \
+	    __attribute__((__format__ (__printf__, fmtarg, firstvararg)))
+#endif
+
 void _u2hts_log(uint8_t level, const char* tag, const char* format, ...)
     __printflike(3, 4);
 
@@ -171,7 +177,7 @@ void _u2hts_log(uint8_t level, const char* tag, const char* format, ...)
   __attribute__((                                                            \
       __used__,                                                              \
       __section__(                                                           \
-          ".u2hts_touch_controllers"))) static const u2hts_touch_controller* \
+          "u2hts_touch_controllers"))) static const u2hts_touch_controller* \
       u2hts_touch_controller_##controller = &controller
 
 void u2hts_set_tp_count(uint8_t tp_count);
@@ -200,7 +206,7 @@ void u2hts_set_tp_count(uint8_t tp_count);
     }                                                           \
   } while (0)
 
-typedef enum {
+typedef enum: uint8_t {
   UE_OK,       // No error
   UE_NSLAVE,   // no slave on i2c bus
   UE_NCOMPAT,  // no controller matched
@@ -209,14 +215,14 @@ typedef enum {
   UE_INCFG,    // config values out of range
 } U2HTS_ERROR_CODES;
 
-typedef enum {
+typedef enum: uint8_t {
   INT_FLAG_EDGE_FALLING = 1,
   INT_FLAG_EDGE_RISING,
   INT_FLAG_LEVEL_LOW,
   INT_FLAG_LEVEL_HIGH
 } U2HTS_INT_FLAGS;
 
-typedef enum {
+typedef enum: uint8_t {
   UB_I2C,
   UB_SPI,
 } U2HTS_BUS_TYPES;
@@ -226,7 +232,7 @@ typedef enum {
   EVENT: Only fingers moving the controller will report coords
 */
 
-typedef enum {
+typedef enum: uint8_t {
   UTC_REPORT_MODE_CONTINOUS,
   UTC_REPORT_MODE_EVENT
 } U2HTS_TOUCH_CONTROLLER_REPORT_MODE;

@@ -14,8 +14,8 @@
 #define LOG_TAG "core"
 
 // .u2hts_touch_controllers section border
-extern u2hts_touch_controller *__u2hts_touch_controllers_begin,
-    *__u2hts_touch_controllers_end;
+extern u2hts_touch_controller *__start_u2hts_touch_controllers,
+    *__stop_u2hts_touch_controllers;
 
 static u2hts_touch_controller* touch_controller = NULL;
 
@@ -321,8 +321,8 @@ static inline void u2hts_list_touch_controller() {
 #if U2HTS_LOG_LEVEL >= U2HTS_LOG_LEVEL_INFO
   printf("%s[I][%s] Supported controllers:",
          u2hts_log_color[U2HTS_LOG_LEVEL_INFO], LOG_TAG);
-  for (u2hts_touch_controller** tc = &__u2hts_touch_controllers_begin;
-       tc < &__u2hts_touch_controllers_end; tc++)
+  for (u2hts_touch_controller** tc = &__start_u2hts_touch_controllers;
+       tc < &__stop_u2hts_touch_controllers; tc++)
     printf(" %s", (*tc)->name);
   printf("%s\r\n", u2hts_log_color[U2HTS_LOG_LEVEL_DEBUG]);
 #endif
@@ -330,16 +330,16 @@ static inline void u2hts_list_touch_controller() {
 
 static inline u2hts_touch_controller* u2hts_get_touch_controller_by_name(
     const char* name) {
-  for (u2hts_touch_controller** tc = &__u2hts_touch_controllers_begin;
-       tc < &__u2hts_touch_controllers_end; tc++)
+  for (u2hts_touch_controller** tc = &__start_u2hts_touch_controllers;
+       tc < &__stop_u2hts_touch_controllers; tc++)
     if (!strcmp((*tc)->name, name)) return *tc;
   return NULL;
 }
 
 static u2hts_touch_controller* u2hts_get_touch_controller_by_i2c_addr(
     const uint8_t addr) {
-  for (u2hts_touch_controller** tc = &__u2hts_touch_controllers_begin;
-       tc < &__u2hts_touch_controllers_end; tc++) {
+  for (u2hts_touch_controller** tc = &__start_u2hts_touch_controllers;
+       tc < &__stop_u2hts_touch_controllers; tc++) {
     if ((*tc)->i2c_config.primary_addr == addr) return *tc;
     if ((*tc)->i2c_config.alt_addrs)
       for (const uint8_t* alt = (*tc)->i2c_config.alt_addrs; *alt; alt++)
