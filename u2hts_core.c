@@ -13,7 +13,7 @@
 
 #define LOG_TAG "core"
 
-// .u2hts_touch_controllers section border
+// u2hts_touch_controllers section border
 extern u2hts_touch_controller *__start_u2hts_touch_controllers,
     *__stop_u2hts_touch_controllers;
 
@@ -77,7 +77,7 @@ __weak_symbol uint16_t u2hts_get_timestamp() {
 __weak_symbol void u2hts_led_set(bool on) { U2HTS_UNUSED(on); }
 __weak_symbol bool u2hts_usrkey_get() { return false; }
 __weak_symbol void u2hts_write_config(uint16_t cfg) { U2HTS_UNUSED(cfg); }
-__weak_symbol uint16_t u2hts_read_config() { return U2HTS_CONFIG_MAGIC; }
+__weak_symbol uint16_t u2hts_read_config() { return 0; }
 
 static const char* u2hts_log_str[] = {"E", "W", "I", "D"};
 
@@ -635,37 +635,33 @@ U2HTS_ERROR_CODES u2hts_init(const u2hts_config* cfg) {
 
   u2hts_touch_controller_coord_config tc_coord_cfg = {0};
 
-  if (coord_config.x_max && coord_config.y_max && coord_config.max_tps) {
-    if (coord_config.x_max > U2HTS_LOGICAL_MAX ||
-        coord_config.y_max > U2HTS_LOGICAL_MAX ||
-        coord_config.max_tps > U2HTS_MAX_TPS) {
-      ULOGE(LOG_TAG, "Config values out of range");
-      return UE_INCFG;
-    }
-  } else {
+  if (!coord_config.x_max || !coord_config.y_max || !coord_config.max_tps) {
     if (touch_controller->operations->get_config) {
       touch_controller->operations->get_config(&tc_coord_cfg);
       ULOGI(LOG_TAG,
             "Controller built-in config: max_tps = %d, x_max = %d, y_max = "
             "%d",
             tc_coord_cfg.max_tps, tc_coord_cfg.x_max, tc_coord_cfg.y_max);
-      if (!tc_coord_cfg.x_max || !tc_coord_cfg.y_max || !tc_coord_cfg.max_tps ||
-          tc_coord_cfg.max_tps > U2HTS_MAX_TPS ||
-          tc_coord_cfg.x_max > U2HTS_LOGICAL_MAX ||
-          tc_coord_cfg.y_max > U2HTS_LOGICAL_MAX) {
+      if (!tc_coord_cfg.x_max || !tc_coord_cfg.y_max || !tc_coord_cfg.max_tps) {
         ULOGE(LOG_TAG, "Config values out of range");
         return UE_INCFG;
-      } else {
-        coord_config.x_max = tc_coord_cfg.x_max;
-        coord_config.y_max = tc_coord_cfg.y_max;
-        coord_config.max_tps = tc_coord_cfg.max_tps;
       }
+      if (!coord_config.x_max) coord_config.x_max = tc_coord_cfg.x_max;
+      if (!coord_config.y_max) coord_config.y_max = tc_coord_cfg.y_max;
+      if (!coord_config.max_tps) coord_config.max_tps = tc_coord_cfg.max_tps;
     } else {
       ULOGE(LOG_TAG,
             "Controller does not support read configuration, but x/y coords or "
             "max_tps are not configured");
       return UE_NCONF;
     }
+  }
+
+  if (coord_config.x_max > U2HTS_LOGICAL_MAX ||
+      coord_config.y_max > U2HTS_LOGICAL_MAX ||
+      coord_config.max_tps > U2HTS_MAX_TPS) {
+    ULOGE(LOG_TAG, "Config values out of range");
+    return UE_INCFG;
   }
 
   ULOGI(LOG_TAG,
